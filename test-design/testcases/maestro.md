@@ -30,6 +30,10 @@ make tf-helm-values TF_ENV=dev-{name}
 
 # 4. Deploy Maestro stack
 make install-maestro
+# Note: You may need to manually install OCM CRDs if the Helm chart CRD installation fails:
+#   kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/api/main/work/v1/0000_00_work.open-cluster-management.io_manifestworks.crd.yaml
+#   kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/api/main/work/v1/0000_01_work.open-cluster-management.io_appliedmanifestworks.crd.yaml
+#   kubectl rollout restart deployment/maestro-agent -n maestro
 
 # 5. Create Maestro consumer (represents a target cluster)
 make create-maestro-consumer MAESTRO_CONSUMER=cluster1
@@ -47,13 +51,6 @@ make install-adapter2   # Maestro transport adapter
 # 9. Port-forward HyperFleet API for local access
 kubectl port-forward -n hyperfleet svc/hyperfleet-api 8000:8000 &
 ```
-
-> **Note:** After `install-maestro`, you may need to manually install OCM CRDs if the Helm chart CRD installation fails:
-> ```bash
-> kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/api/main/work/v1/0000_00_work.open-cluster-management.io_manifestworks.crd.yaml
-> kubectl apply -f https://raw.githubusercontent.com/open-cluster-management-io/api/main/work/v1/0000_01_work.open-cluster-management.io_appliedmanifestworks.crd.yaml
-> kubectl rollout restart deployment/maestro-agent -n maestro
-> ```
 
 ---
 
@@ -83,24 +80,15 @@ This test validates the complete end-to-end flow of the Maestro transportation l
 2. Maestro server is deployed and accessible (gRPC on port 8090, HTTP on port 8000)
 3. At least one Maestro consumer is registered (e.g., `cluster1`)
 4. Adapter is deployed in Maestro transport mode (`transport.client: "maestro"`)
-5. Port-forward to HyperFleet API is active (`kubectl port-forward -n hyperfleet svc/hyperfleet-api 8000:8000`)
+5. HyperFleet API is accessible (e.g., via port-forward or Ingress)
+6. All pods in `hyperfleet` namespace are `Running` (API, 2 sentinels, 2 adapters)
+7. All pods in `maestro` namespace are `Running` (maestro, maestro-agent, maestro-db, maestro-mqtt)
 
 ---
 
 ### Test Steps
 
-#### Step 1: Verify all pods are running
-**Action:**
-```bash
-kubectl get pods -n hyperfleet --no-headers
-kubectl get pods -n maestro --no-headers
-```
-
-**Expected Result:**
-- All pods in `hyperfleet` namespace are `Running` (API, 2 sentinels, 2 adapters)
-- All pods in `maestro` namespace are `Running` (maestro, maestro-agent, maestro-db, maestro-mqtt)
-
-#### Step 2: Create a cluster via HyperFleet API
+#### Step 1: Create a cluster via HyperFleet API
 **Action:**
 ```bash
 curl -s -X POST ${API_URL}/api/hyperfleet/v1/clusters \
@@ -121,7 +109,7 @@ curl -s -X POST ${API_URL}/api/hyperfleet/v1/clusters \
 **Expected Result:**
 - API returns HTTP 201 with a valid cluster ID and `generation: 1`
 
-#### Step 3: Verify adapter processes the event (check adapter logs)
+#### Step 2: Verify adapter processes the event (check adapter logs)
 **Action:**
 - Wait ~10 seconds for Sentinel to poll the cluster and publish an event to the broker, then check adapter2 logs:
 ```bash
@@ -135,7 +123,7 @@ kubectl logs -n hyperfleet -l app.kubernetes.io/instance=hyperfleet-adapter2 --t
 - ManifestWork applied to target consumer
 - Event execution status: success
 
-#### Step 4: Verify ManifestWork was created on Maestro (via Maestro HTTP API)
+#### Step 3: Verify ManifestWork was created on Maestro (via Maestro HTTP API)
 **Action:**
 - Query the Maestro resource-bundles API from inside the maestro pod:
 ```bash
@@ -149,7 +137,7 @@ kubectl exec -n maestro deployment/maestro -- \
 - A resource bundle exists targeting `cluster1`
 - Contains 2 manifests (Namespace and ConfigMap)
 
-#### Step 5: Verify ManifestWork metadata (labels and annotations)
+#### Step 4: Verify ManifestWork metadata (labels and annotations)
 **Action:**
 ```bash
 kubectl exec -n maestro deployment/maestro -- \
@@ -161,7 +149,7 @@ kubectl exec -n maestro deployment/maestro -- \
 - Labels include `hyperfleet.io/cluster-id`, `hyperfleet.io/generation`, `hyperfleet.io/adapter`
 - Annotations include `hyperfleet.io/generation`, `hyperfleet.io/managed-by`
 
-#### Step 6: Verify K8s resources created by Maestro agent on target cluster
+#### Step 5: Verify K8s resources created by Maestro agent on target cluster
 **Action:**
 ```bash
 # Check namespace created
@@ -175,7 +163,7 @@ kubectl get configmap -n <CLUSTER_ID>-adapter2-namespace
 - Namespace `<CLUSTER_ID>-adapter2-namespace` exists and is `Active`
 - ConfigMap `<CLUSTER_ID>-adapter2-configmap` exists in that namespace
 
-#### Step 7: Verify adapter status report to HyperFleet API
+#### Step 6: Verify adapter status report to HyperFleet API
 **Action:**
 ```bash
 curl -s ${API_URL}/api/hyperfleet/v1/clusters/<CLUSTER_ID>/statuses \
@@ -188,7 +176,7 @@ curl -s ${API_URL}/api/hyperfleet/v1/clusters/<CLUSTER_ID>/statuses \
 - `observed_generation: 1`
 - Applied=True (AppliedManifestWorkComplete), Available=True (ResourcesAvailable), Health=True (Healthy)
 
-#### Step 8: Cleanup
+#### Step 7: Cleanup
 **Action:**
 ```bash
 # Delete the namespace created by Maestro agent
