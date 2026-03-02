@@ -261,6 +261,7 @@ curl -s ${API_URL}/api/hyperfleet/v1/clusters/<CLUSTER_ID>/statuses \
 - Status entry with `adapter: "<ADAPTER_NAME>"`
 - Three conditions: Applied, Available, Health
 - `observed_generation: 1`
+- `observed_time` is present and is a valid timestamp
 - Applied=True (AppliedManifestWorkComplete), Available=True (ResourcesAvailable), Health=True (Healthy)
 
 Example output:
@@ -268,6 +269,7 @@ Example output:
 {
   "adapter": "<ADAPTER_NAME>, the adapter name that reported this status",
   "observed_generation": 1,
+  "observed_time": "2026-01-01T00:00:00Z, timestamp of when this status was observed",
   "conditions": [
     {
       "type": "Applied",
