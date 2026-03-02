@@ -56,12 +56,11 @@ func (h *Helper) AnyConditionFalse(conditions []openapi.AdapterCondition, condTy
     return false
 }
 
-// AdapterNameToClusterConditionType converts an adapter name to its corresponding cluster condition type.
+// AdapterNameToConditionType converts an adapter name to its corresponding condition type.
+// Works for both cluster adapters and nodepool adapters.
 // Examples:
 //   - "cl-namespace" -> "ClNamespaceSuccessful"
-//   - "cl-job" -> "ClJobSuccessful"
-//   - "cl-deployment" -> "ClDeploymentSuccessful"
-func (h *Helper) AdapterNameToClusterConditionType(adapterName string) string {
+func (h *Helper) AdapterNameToConditionType(adapterName string) string {
     // Split adapter name by "-" (e.g., "cl-namespace" -> ["cl", "namespace"])
     parts := strings.Split(adapterName, "-")
 
