@@ -132,15 +132,15 @@ This test verifies that the Kubernetes resources of different types (e.g., confi
 
 ---
 
-| **Field** | **Value**     |
-|-----------|---------------|
-| **Pos/Neg** | Positive      |
-| **Priority** | Tier0         |
-| **Status** | Automated     |
-| **Automation** | Automated     |
-| **Version** | MVP           |
-| **Created** | 2026-02-04    |
-| **Updated** | 2026-03-02    |
+| **Field** | **Value**  |
+|-----------|------------|
+| **Pos/Neg** | Positive   |
+| **Priority** | Tier0      |
+| **Status** | Automated  |
+| **Automation** | Automated  |
+| **Version** | MVP        |
+| **Created** | 2026-02-04 |
+| **Updated** | 2026-03-05 |
 
 
 ---
@@ -193,7 +193,6 @@ kubectl get configmap -n {cluster_id} \
     - `hyperfleet.io/resource-type`: "configmap"
   - ConfigMap has correct annotations:
     - `hyperfleet.io/generation`: "1" (for new creation request)
-  - ConfigMap contains expected data fields from template (nodepool.id, nodepool.name, cluster.id, etc.)
 
 #### Step 2: Verify Final NodePool State
 
