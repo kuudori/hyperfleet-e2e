@@ -1,136 +1,130 @@
 # Simple valid HyperFleet Adapter Configuration for testing
 
-apiVersion: hyperfleet.redhat.com/v1alpha1
-kind: AdapterTaskConfig
-metadata:
-  name: np-configmap
-  labels:
-    hyperfleet.io/adapter-type: np-configmap
-    hyperfleet.io/component: adapter
-spec:
-  # Parameters with all required variables
-  params:
-    - name: "clusterId"
-      source: "event.owner_references.id"
-      type: "string"
-      required: true
-    - name: "nodepoolId"
-      source: "event.id"
-      type: "string"
-      required: true
+# Parameters with all required variables
+params:
+  - name: "clusterId"
+    source: "event.owner_references.id"
+    type: "string"
+    required: true
+  - name: "nodepoolId"
+    source: "event.id"
+    type: "string"
+    required: true
 
-  # Preconditions with valid operators and CEL expressions
-  preconditions:
-    - name: "nodepoolStatus"
-      apiCall:
-        method: "GET"
-        url: "/clusters/{{ .clusterId }}/nodepools/{{ .nodepoolId }}"
-        timeout: 10s
-        retryAttempts: 3
-        retryBackoff: "exponential"
-      capture:
-        - name: "nodepoolName"
-          field: "name"
-        - name: "generationSpec"
-          field: "generation"
-        - name: "readyConditionStatus"
-          expression: |
-            status.conditions.filter(c, c.type == "Ready").size() > 0
-              ? status.conditions.filter(c, c.type == "Ready")[0].status
-              : "False"
-      # Structured conditions with valid operators
-      conditions:
-        - field: "readyConditionStatus"
-          operator: "equals"
-          value: "False"
+# Preconditions with valid operators and CEL expressions
+preconditions:
+  - name: "nodepoolStatus"
+    api_call:
+      method: "GET"
+      url: "/clusters/{{ .clusterId }}/nodepools/{{ .nodepoolId }}"
+      timeout: 10s
+      retry_attempts: 3
+      retry_backoff: "exponential"
+    capture:
+      - name: "nodepoolName"
+        field: "name"
+      - name: "generationSpec"
+        field: "generation"
+      - name: "readyConditionStatus"
+        expression: |
+          status.conditions.filter(c, c.type == "Ready").size() > 0
+            ? status.conditions.filter(c, c.type == "Ready")[0].status
+            : "False"
+    # Structured conditions with valid operators
+    conditions:
+      - field: "readyConditionStatus"
+        operator: "equals"
+        value: "False"
 
-    - name: "clusterAdapterStatus"
-      apiCall:
-        method: "GET"
-        url: "/clusters/{{ .clusterId }}/statuses"
-        timeout: 10s
-        retryAttempts: 3
-        retryBackoff: "exponential"
-      capture:
-        - name: "clusterNamespaceStatus"
-          field: "{.items[?(@.adapter=='cl-namespace')].data.namespace.status}"
-      conditions:
-        - field: "clusterNamespaceStatus"
-          operator: "equals"
-          value: "Active"
+  - name: "clusterAdapterStatus"
+    api_call:
+      method: "GET"
+      url: "/clusters/{{ .clusterId }}/statuses"
+      timeout: 10s
+      retry_attempts: 3
+      retry_backoff: "exponential"
+    capture:
+      - name: "clusterNamespaceStatus"
+        field: "{.items[?(@.adapter=='cl-namespace')].data.namespace.status}"
+    conditions:
+      - field: "clusterNamespaceStatus"
+        operator: "equals"
+        value: "Active"
 
-  # Resources with valid K8s manifests
-  resources:
-    - name: "nodepoolConfigMap"
-      manifest:
-        ref: "/etc/adapter/configmap.yaml"
-      discovery:
-        namespace: "{{ .clusterId }}"
-        bySelectors:
-          labelSelector:
-            hyperfleet.io/resource-type: "configmap"
-            hyperfleet.io/cluster-id: "{{ .clusterId }}"
-            hyperfleet.io/nodepool-id: "{{ .nodepoolId }}"
+# Resources with valid K8s manifests
+resources:
+  - name: "nodepoolConfigMap"
+    transport:
+      client: "kubernetes"
+    manifest:
+      ref: "/etc/adapter/configmap.yaml"
+    discovery:
+      namespace: "{{ .clusterId }}"
+      by_selectors:
+        label_selector:
+          hyperfleet.io/resource-type: "configmap"
+          hyperfleet.io/cluster-id: "{{ .clusterId }}"
+          hyperfleet.io/nodepool-id: "{{ .nodepoolId }}"
 
-  # Post-processing with valid CEL expressions
-  post:
-    payloads:
-      - name: "nodepoolStatusPayload"
-        build:
-          adapter: "{{ .metadata.name }}"
-          conditions:
-            # Applied: ConfigMap successfully created
-            - type: "Applied"
-              status:
-                expression: |
-                  has(resources.nodepoolConfigMap) ? "True" : "False"
-              reason:
-                expression: |
-                  has(resources.nodepoolConfigMap)
-                    ? "ConfigMapApplied"
-                    : "ConfigMapPending"
-              message:
-                expression: |
-                  has(resources.nodepoolConfigMap)
-                    ? "nodepoolConfigMap manifest applied successfully"
-                    : "nodepoolConfigMap is pending to be applied"
-            # Available: Check configmap exists
-            - type: "Available"
-              status:
-                expression: |
-                  has(resources.nodepoolConfigMap) && has(resources.nodepoolConfigMap.data) ? "True" : "False"
-              reason:
-                expression: |
-                  has(resources.nodepoolConfigMap) && has(resources.nodepoolConfigMap.data)
-                    ? "ConfigMapReady"
-                    : "ConfigMapNotReady"
-              message:
-                expression: |
-                  has(resources.nodepoolConfigMap) && has(resources.nodepoolConfigMap.data)
-                    ? "ConfigMap is available and contains data"
-                    : "ConfigMap is not yet available"
-            # Health: Adapter execution status (runtime)
-            - type: "Health"
-              status:
-                expression: |
-                  adapter.?executionStatus.orValue("") == "success" ? "True" : "False"
-              reason:
-                expression: |
-                  adapter.?errorReason.orValue("") != "" ? adapter.?errorReason.orValue("") : "Healthy"
-              message:
-                expression: |
-                  adapter.?errorMessage.orValue("") != "" ? adapter.?errorMessage.orValue("") : "All adapter operations in progress or completed successfully"
-          # Event generation ID metadata field needs to use expression to avoid interpolation issues
-          observed_generation:
-            expression: "generationSpec"
-          observed_time: "{{ now | date \"2006-01-02T15:04:05Z07:00\" }}"
+# Post-processing with valid CEL expressions
+post:
+  payloads:
+    - name: "nodepoolStatusPayload"
+      build:
+        adapter: "{{ .adapter.name }}"
+        conditions:
+          # Applied: ConfigMap successfully created
+          - type: "Applied"
+            status:
+              expression: |
+                has(resources.nodepoolConfigMap) ? "True" : "False"
+            reason:
+              expression: |
+                has(resources.nodepoolConfigMap)
+                  ? "ConfigMapApplied"
+                  : "ConfigMapPending"
+            message:
+              expression: |
+                has(resources.nodepoolConfigMap)
+                  ? "nodepoolConfigMap manifest applied successfully"
+                  : "nodepoolConfigMap is pending to be applied"
+          # Available: Check configmap exists
+          - type: "Available"
+            status:
+              expression: |
+                has(resources.nodepoolConfigMap) && has(resources.nodepoolConfigMap.data) ? "True" : "False"
+            reason:
+              expression: |
+                has(resources.nodepoolConfigMap) && has(resources.nodepoolConfigMap.data)
+                  ? "ConfigMapReady"
+                  : "ConfigMapNotReady"
+            message:
+              expression: |
+                has(resources.nodepoolConfigMap) && has(resources.nodepoolConfigMap.data)
+                  ? "ConfigMap is available and contains data"
+                  : "ConfigMap is not yet available"
+          # Health: Adapter execution status (runtime)
+          - type: "Health"
+            status:
+              expression: |
+                adapter.?executionStatus.orValue("") == "success" ? "True" : "False"
+            reason:
+              expression: |
+                adapter.?errorReason.orValue("") != "" ? adapter.?errorReason.orValue("") : "Healthy"
+            message:
+              expression: |
+                adapter.?errorMessage.orValue("") != "" ? adapter.?errorMessage.orValue("") : "All adapter operations in progress or completed successfully"
+        # Event generation ID metadata field needs to use expression to avoid interpolation issues
+        observed_generation:
+          expression: "generationSpec"
+        observed_time: "{{ now | date \"2006-01-02T15:04:05Z07:00\" }}"
 
-    postActions:
-      - name: "reportNodepoolStatus"
-        apiCall:
-          method: "POST"
-          url: "/clusters/{{ .clusterId }}/nodepools/{{ .nodepoolId }}/statuses"
-          headers:
-            - name: "Content-Type"
-              value: "application/json"
-          body: "{{ .nodepoolStatusPayload }}"
+  post_actions:
+    - name: "reportNodepoolStatus"
+      api_call:
+        method: "POST"
+        url: "/clusters/{{ .clusterId }}/nodepools/{{ .nodepoolId }}/statuses"
+        headers:
+          - name: "Content-Type"
+            value: "application/json"
+        body: "{{ .nodepoolStatusPayload }}"

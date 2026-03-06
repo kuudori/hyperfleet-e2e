@@ -1,28 +1,23 @@
-apiVersion: hyperfleet.redhat.com/v1alpha1
-kind: AdapterConfig
-metadata:
+adapter:
   name: np-configmap
-  labels:
-    hyperfleet.io/adapter-type: np-configmap
-    hyperfleet.io/component: adapter
-spec:
-  adapter:
-    version: "0.1.0"
+  #version: "0.1.0"
 
-  # Log the full merged configuration after load (default: false)
-  debugConfig: false
+# Log the full merged configuration after load (default: false)
+debug_config: false
+log:
+  level: debug
 
-  clients:
-    hyperfleetApi:
-      baseUrl: CHANGE_ME
-      version: v1
-      timeout: 2s
-      retryAttempts: 3
-      retryBackoff: exponential
+clients:
+  hyperfleet_api:
+    base_url: CHANGE_ME
+    version: v1
+    timeout: 2s
+    retry_attempts: 3
+    retry_backoff: exponential
 
-    broker:
-      subscriptionId: CHANGE_ME
-      topic: CHANGE_ME
+  broker:
+    subscription_id: CHANGE_ME
+    topic: CHANGE_ME
 
-    kubernetes:
-      apiVersion: "v1"
+  kubernetes:
+    api_version: "v1"
