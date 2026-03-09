@@ -13,7 +13,7 @@ install_sentinel_instance() {
     local resource_type="$1"  # "clusters" or "nodepools"
 
     local component_name="Sentinel (${resource_type})"
-    local release_name="${RELEASE_PREFIX}-sentinel-${resource_type}"
+    local release_name="sentinel-${NAMESPACE}-${resource_type}"
     local full_chart_path="${WORK_DIR}/sentinel/${SENTINEL_CHART_PATH}"
 
     log_section "Installing ${component_name}"
@@ -106,7 +106,7 @@ uninstall_sentinel_instance() {
     fi
 
     local component_name="Sentinel (${resource_type_display})"
-    local release_name="${RELEASE_PREFIX}-sentinel-${resource_type}"
+    local release_name="sentinel-${NAMESPACE}-${resource_type}"
 
     log_section "Uninstalling ${component_name}"
 

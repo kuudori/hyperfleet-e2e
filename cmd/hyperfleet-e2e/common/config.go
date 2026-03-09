@@ -41,6 +41,11 @@ func LoadConfig(configFlagValue string) error {
 	// Binding AFTER reading config ensures env vars override config file values
 	bindAllEnvVars()
 
+	// 5. Add custom environment variable bindings
+	// These allow alternative env var names for specific config paths
+	_ = viper.BindEnv("adapters.cluster", "API_ADAPTERS_CLUSTER")
+	_ = viper.BindEnv("adapters.nodepool", "API_ADAPTERS_NODEPOOL")
+
 	return nil
 }
 

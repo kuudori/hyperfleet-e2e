@@ -17,7 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WORK_DIR="${PROJECT_ROOT}/.deploy-work"
-TESTDATA_DIR="${PROJECT_ROOT}/testdata"
+TESTDATA_DIR="${TESTDATA_DIR:-${PROJECT_ROOT}/testdata}"
 
 # ============================================================================
 # Load Environment Variables from .env file
@@ -55,6 +55,11 @@ API_SERVICE_TYPE="${API_SERVICE_TYPE:-LoadBalancer}"
 API_ADAPTERS_CLUSTER="${API_ADAPTERS_CLUSTER:-}"
 API_ADAPTERS_NODEPOOL="${API_ADAPTERS_NODEPOOL:-}"
 
+# Adapter Test Data Configuration
+ADAPTERS_FILE_DIR="${ADAPTERS_FILE_DIR:-${TESTDATA_DIR}/adapter-configs}"
+CLUSTER_TIER0_ADAPTERS_DEPLOYMENT="${CLUSTER_TIER0_ADAPTERS_DEPLOYMENT:-}"
+NODEPOOL_TIER0_ADAPTERS_DEPLOYMENT="${NODEPOOL_TIER0_ADAPTERS_DEPLOYMENT:-}"
+
 # Sentinel Component
 SENTINEL_IMAGE_REPO="${SENTINEL_IMAGE_REPO:-hyperfleet-sentinel}"
 SENTINEL_IMAGE_TAG="${SENTINEL_IMAGE_TAG:-latest}"
@@ -69,9 +74,6 @@ ADAPTER_GOOGLEPUBSUB_CREATE_SUBSCRIPTION_IF_MISSING="${ADAPTER_GOOGLEPUBSUB_CREA
 
 # HyperFleet API Configuration
 API_BASE_URL="${API_BASE_URL:-http://hyperfleet-api:8000}"
-
-# Release name prefix
-RELEASE_PREFIX="${RELEASE_PREFIX:-hyperfleet}"
 
 # Helm Chart Sources
 API_CHART_REPO="${API_CHART_REPO:-https://github.com/openshift-hyperfleet/hyperfleet-api.git}"
@@ -144,12 +146,13 @@ OPTIONAL FLAGS:
     # API Configuration
     --api-base-url <url>            HyperFleet API base URL for Sentinel and Adapter
                                     (default: http://hyperfleet-api.<namespace>.svc.cluster.local:8000)
-    --api-adapters-cluster <list>   Comma-separated list of cluster adapters (e.g., "example1,validation")
-    --api-adapters-nodepool <list>  Comma-separated list of nodepool adapters (e.g., "validation,hypershift")
+    --api-adapters-cluster <list>   Comma-separated list of cluster adapters for API config (e.g., "cl-namespace,cl-job")
+    --api-adapters-nodepool <list>  Comma-separated list of nodepool adapters for API config (e.g., "np-configmap")
 
-    # Release Configuration
-    --release-prefix <prefix>       Release name prefix (default: hyperfleet)
-                                    Components will be named: <prefix>-api, <prefix>-sentinel, <prefix>-adapter
+    # Adapter Deployment Configuration
+    --cluster-tier0-adapters <list>  Comma-separated list of cluster-level adapters to deploy (e.g., "cl-namespace,cl-job")
+    --nodepool-tier0-adapters <list> Comma-separated list of nodepool-level adapters to deploy (e.g., "np-configmap")
+    --adapters-file-dir <path>       Base directory containing adapter test data folders (default: ${TESTDATA_DIR}/adapter-configs)
 
     # Uninstall Options (only for --action uninstall)
     --delete-k8s-resources          Delete Kubernetes resources (Helm releases + namespace)
@@ -165,12 +168,18 @@ ENVIRONMENT VARIABLES:
     All configuration can be set in the .env file located at: ${SCRIPT_DIR}/.env
 
     Common variables:
-    - NAMESPACE                     Kubernetes namespace
-    - IMAGE_REGISTRY                Container image registry
-    - API_IMAGE_TAG                 API image tag
-    - SENTINEL_IMAGE_TAG            Sentinel image tag
-    - ADAPTER_IMAGE_TAG             Adapter image tag
-    - GCP_PROJECT_ID                Google Cloud Project ID for Pub/Sub
+    - NAMESPACE                              Kubernetes namespace
+    - IMAGE_REGISTRY                         Container image registry
+    - API_IMAGE_TAG                          API image tag
+    - SENTINEL_IMAGE_TAG                     Sentinel image tag
+    - ADAPTER_IMAGE_TAG                      Adapter image tag
+    - GCP_PROJECT_ID                         Google Cloud Project ID for Pub/Sub
+    - TESTDATA_DIR                           Base directory for test data (default: PROJECT_ROOT/testdata)
+    - CLUSTER_TIER0_ADAPTERS_DEPLOYMENT      Cluster-level adapters to deploy (comma-separated)
+    - NODEPOOL_TIER0_ADAPTERS_DEPLOYMENT     NodePool-level adapters to deploy (comma-separated)
+    - ADAPTERS_FILE_DIR                      Base directory for adapter test data (default: TESTDATA_DIR/adapter-configs)
+    - API_ADAPTERS_CLUSTER                   Adapters for API cluster config (set per test case)
+    - API_ADAPTERS_NODEPOOL                  Adapters for API nodepool config (set per test case)
 
 EXAMPLES:
     # Install all components with default settings
@@ -279,8 +288,16 @@ parse_arguments() {
                 API_ADAPTERS_NODEPOOL="$2"
                 shift 2
                 ;;
-            --release-prefix)
-                RELEASE_PREFIX="$2"
+            --cluster-tier0-adapters)
+                CLUSTER_TIER0_ADAPTERS_DEPLOYMENT="$2"
+                shift 2
+                ;;
+            --nodepool-tier0-adapters)
+                NODEPOOL_TIER0_ADAPTERS_DEPLOYMENT="$2"
+                shift 2
+                ;;
+            --adapters-file-dir)
+                ADAPTERS_FILE_DIR="$2"
                 shift 2
                 ;;
             --delete-k8s-resources)
@@ -405,7 +422,7 @@ perform_install() {
         # Display API external IP if available
         if [[ "${INSTALL_API}" == "true" ]]; then
             local external_ip
-            external_ip=$(kubectl get svc "${RELEASE_PREFIX}-api" -n "${NAMESPACE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            external_ip=$(kubectl get svc "api-${NAMESPACE}" -n "${NAMESPACE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
             if [[ -n "${external_ip}" ]]; then
                 echo
                 log_info "HyperFleet API External IP: ${external_ip}"

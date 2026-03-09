@@ -1,15 +1,15 @@
 adapterConfig:
   create: true
   files:
-    adapter-config.yaml: clusters-cl-deployment/adapter-config.yaml
+    adapter-config.yaml: np-configmap/adapter-config.yaml
   log:
     level: debug
 
 adapterTaskConfig:
   create: true
   files:
-    task-config.yaml: clusters-cl-deployment/adapter-task-config.yaml
-    deployment.yaml: clusters-cl-deployment/adapter-task-resource-deployment.yaml
+    task-config.yaml: np-configmap/adapter-task-config.yaml
+    configmap.yaml: np-configmap/adapter-task-resource-configmap.yaml
 
 broker:
   create: true
@@ -27,5 +27,5 @@ image:
 
 rbac:
    resources:
-     - deployments
-     - deployments/status
+     - configmaps
+     - configmaps/status
