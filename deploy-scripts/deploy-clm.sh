@@ -80,7 +80,7 @@ API_CHART_PATH="${API_CHART_PATH:-charts}"
 
 SENTINEL_CHART_REPO="${SENTINEL_CHART_REPO:-https://github.com/openshift-hyperfleet/hyperfleet-sentinel.git}"
 SENTINEL_CHART_REF="${SENTINEL_CHART_REF:-main}"
-SENTINEL_CHART_PATH="${SENTINEL_CHART_PATH:-deployments/helm/sentinel}"
+SENTINEL_CHART_PATH="${SENTINEL_CHART_PATH:-charts}"
 
 ADAPTER_CHART_REPO="${ADAPTER_CHART_REPO:-https://github.com/openshift-hyperfleet/hyperfleet-adapter.git}"
 ADAPTER_CHART_REF="${ADAPTER_CHART_REF:-main}"
