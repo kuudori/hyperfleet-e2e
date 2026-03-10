@@ -15,17 +15,17 @@ testdata/
 
 ### Valid Payloads
 
-| File | Purpose | Use Case |
-|------|---------|----------|
-| `gcp.json` | Standard GCP cluster | General testing, cluster lifecycle |
+| File                   | Purpose | Use Case |
+|------------------------|---------|----------|
+| `cluster-request.json` | Standard cluster | General testing, cluster lifecycle |
 
 ## NodePool Payloads
 
 ### Valid Payloads
 
-| File | Purpose | Use Case |
-|------|---------|----------|
-| `gcp.json` | Standard compute nodepool | General-purpose testing |
+| File                    | Purpose | Use Case |
+|-------------------------|---------|----------|
+| `nodepool-request.json` | Standard compute nodepool | General-purpose testing |
 
 ## Usage in Tests
 
@@ -33,10 +33,10 @@ testdata/
 
 ```go
 // Create cluster from payload
-cluster, err := h.Client.CreateClusterFromPayload(ctx, "testdata/payloads/clusters/gcp.json")
+cluster, err := h.Client.CreateClusterFromPayload(ctx, "testdata/payloads/clusters/cluster-request.json")
 
 // Create nodepool from payload
-nodepool, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, "testdata/payloads/nodepools/gcp.json")
+nodepool, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, "testdata/payloads/nodepools/nodepool-request.json")
 ```
 
 ### Payload Templates
@@ -46,7 +46,7 @@ Payloads support Go template syntax for dynamic values. For example:
 ```json
 {
   "kind": "Cluster",
-  "name": "hp-gcp-cluster-{{.Random}}",
+  "name": "hp-cluster-{{.Random}}",
   "labels": {
     "created-at": "{{.Timestamp}}"
   }
@@ -57,9 +57,9 @@ Template variables (e.g., `{{.Random}}`, `{{.UUID}}`, `{{.Timestamp}}`) are auto
 
 ## Payload Naming Conventions
 
-- **Platform prefix**: `gcp`, `aws`, `azure`
-- **Optional variant suffix**: `_variant` for specialized payloads (e.g., `_gpu`, `_minimal`)
-- **Lowercase with underscores**: `gcp.json`, `gcp_gpu.json` (future), not `GCP.json`
+- **Resource type prefix**: `cluster-request`, `nodepool-request`
+- **Optional variant suffix**: `-variant` for specialized payloads (e.g., `-gpu`, `-minimal`)
+- **Lowercase with hyphens**: `cluster-request.json`, `cluster-request-gpu.json` (future), not `CLUSTER-REQUEST.json`
 
 ## Adding New Payloads
 
@@ -83,8 +83,8 @@ Payloads map to test implementation files:
 
 | Payload | Test File | Description |
 |---------|-----------|-------------|
-| `clusters/gcp.json` | `e2e/cluster/creation.go` | Cluster creation lifecycle |
-| `nodepools/gcp.json` | `e2e/nodepool/creation.go` | NodePool creation lifecycle |
+| `clusters/cluster-request.json` | `e2e/cluster/creation.go` | Cluster creation lifecycle |
+| `nodepools/nodepool-request.json` | `e2e/nodepool/creation.go` | NodePool creation lifecycle |
 
 ## See Also
 

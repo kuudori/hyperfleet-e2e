@@ -107,6 +107,30 @@ func (h *Helper) VerifyDeploymentAvailable(ctx context.Context, namespace string
     return nil
 }
 
+// VerifyConfigMap verifies a configmap exists with expected labels and annotations.
+// Uses expectedLabels to find the configmap via label selector - if the list returns a configmap,
+// it's guaranteed to have those labels (no need to verify them again).
+func (h *Helper) VerifyConfigMap(ctx context.Context, namespace string, expectedLabels, expectedAnnotations map[string]string) error {
+	labelSelector := labels.SelectorFromSet(expectedLabels).String()
+	logger.Info("verifying configmap status", "namespace", namespace, "label_selector", labelSelector)
+
+	// Get configmap (handles uniqueness validation internally)
+	cm, err := h.K8sClient.GetUniqueConfigMapByLabels(ctx, namespace, expectedLabels)
+	if err != nil {
+		return err
+	}
+
+	// Verify annotations
+	if err := verifyMapContains(cm.Annotations, expectedAnnotations, "annotation"); err != nil {
+		return fmt.Errorf("configmap %s in namespace %s: %w", cm.Name, namespace, err)
+	}
+
+	logger.Info("configmap verified successfully",
+		"namespace", namespace,
+		"configmap", cm.Name)
+	return nil
+}
+
 // verifyMapContains checks if actual map contains all expected key-value pairs
 func verifyMapContains(actual, expected map[string]string, mapType string) error {
     missing := make([]string, 0, len(expected))

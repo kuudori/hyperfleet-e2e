@@ -114,6 +114,19 @@ func (c *Client) FetchDeploymentsByLabels(ctx context.Context, namespace string,
 	return deployments.Items, nil
 }
 
+// FetchConfigMapsByLabels lists configmaps matching label selector in namespace
+func (c *Client) FetchConfigMapsByLabels(ctx context.Context, namespace string, labelMap map[string]string) ([]corev1.ConfigMap, error) {
+	labelSelector := labels.SelectorFromSet(labelMap).String()
+	configmaps, err := c.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list configmaps in namespace %s with selector %s: %w",
+			namespace, labelSelector, err)
+	}
+	return configmaps.Items, nil
+}
+
 // GetUniqueJobByLabels fetches exactly one job matching labels in namespace.
 // Returns error if zero or multiple jobs are found.
 func (c *Client) GetUniqueJobByLabels(ctx context.Context, namespace string, labelMap map[string]string) (*batchv1.Job, error) {
@@ -154,6 +167,27 @@ func (c *Client) GetUniqueDeploymentByLabels(ctx context.Context, namespace stri
 	}
 
 	return &deployments[0], nil
+}
+
+// GetUniqueConfigMapByLabels fetches exactly one configmap matching labels in namespace.
+// Returns error if zero or multiple configmaps are found.
+func (c *Client) GetUniqueConfigMapByLabels(ctx context.Context, namespace string, labelMap map[string]string) (*corev1.ConfigMap, error) {
+	configmaps, err := c.FetchConfigMapsByLabels(ctx, namespace, labelMap)
+	if err != nil {
+		return nil, err
+	}
+
+	labelSelector := labels.SelectorFromSet(labelMap).String()
+
+	if len(configmaps) == 0 {
+		return nil, fmt.Errorf("no configmap found in namespace %s with selector %s", namespace, labelSelector)
+	}
+	if len(configmaps) > 1 {
+		return nil, fmt.Errorf("multiple configmaps (%d) found in namespace %s with selector %s - expected exactly one",
+			len(configmaps), namespace, labelSelector)
+	}
+
+	return &configmaps[0], nil
 }
 
 // HasNamespacePhase checks if namespace is in the specified phase

@@ -64,7 +64,7 @@ install_sentinel_instance() {
     # This enables the sentinel to include ownerReferences from the Kubernetes resource
     # in the message data sent to adapters, which is required for nodepools management
     if [[ "${resource_type}" == "nodepools" ]]; then
-        helm_cmd+=(--set "config.message_data.owner_references=.owner_references")
+        helm_cmd+=(--set "config.messageData.owner_references=resource.owner_references")
     fi
 
     log_info "Executing: ${helm_cmd[*]}"

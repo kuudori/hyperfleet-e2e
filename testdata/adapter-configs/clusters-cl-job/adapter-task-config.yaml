@@ -127,7 +127,7 @@ spec:
                   has(resources.testJob) ? "True" : "False"
               reason:
                 expression: |
-                  has(resources.testJob.spec)
+                  has(resources.testJob)
                     ? "JobApplied"
                     : "JobPending"
               message:

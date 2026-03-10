@@ -163,7 +163,7 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
                     // Validate adapter-specific conditions in cluster status
                     // Each required adapter should report its own condition type (e.g., ClNamespaceSuccessful, ClJobSuccessful)
                     for _, adapterName := range h.Cfg.Adapters.Cluster {
-                        expectedCondType := h.AdapterNameToClusterConditionType(adapterName)
+                        expectedCondType := h.AdapterNameToConditionType(adapterName)
                         hasAdapterCondition := h.HasResourceCondition(
                             finalCluster.Status.Conditions,
                             expectedCondType,

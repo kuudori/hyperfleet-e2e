@@ -28,20 +28,20 @@ Test payloads are stored in `testdata/payloads/`:
 ```
 testdata/payloads/
 ├── clusters/
-│   └── gcp.json        # GCP cluster payload
+│   └── cluster-request.json        # resource cluster payload
 └── nodepools/
-    └── gcp.json        # GCP nodepool payload
+    └── nodepool-request.json        # resource nodepool payload
 ```
 
 #### Payload Templates
 
 Payload files support Go template syntax for dynamic values. This prevents naming conflicts when running tests multiple times in long-running environments.
 
-**Example** (`testdata/payloads/clusters/gcp.json`):
+**Example** (`testdata/payloads/clusters/cluster-request.json`):
 ```json
 {
   "kind": "Cluster",
-  "name": "hp-gcp-cluster-{{.Random}}",
+  "name": "hp-cluster-{{.Random}}",
   "labels": {
     "environment": "production",
     "created-at": "{{.Timestamp}}"
@@ -90,7 +90,7 @@ var _ = ginkgo.Describe(testName,
 
         ginkgo.It("should create cluster successfully", func(ctx context.Context) {
             ginkgo.By("submitting cluster creation request")
-            cluster, err := h.Client.CreateClusterFromPayload(ctx, "testdata/payloads/clusters/gcp.json")
+            cluster, err := h.Client.CreateClusterFromPayload(ctx, "testdata/payloads/clusters/cluster-request.json")
             Expect(err).NotTo(HaveOccurred())
             clusterID = *cluster.Id
 
@@ -116,7 +116,7 @@ var _ = ginkgo.Describe(testName,
 ### 1. Test Name
 
 ```go
-var lifecycleTestName = "[Suite: cluster] Full Cluster Creation Flow on GCP"
+var lifecycleTestName = "[Suite: cluster] Full Cluster Creation Flow"
 ```
 
 - Format: `[Suite: component] Description`
@@ -140,7 +140,7 @@ All tests must use labels for categorization. See `pkg/labels/labels.go` for com
 ```go
 import "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
 
-var testName = "[Suite: cluster] Full Cluster Creation Flow on GCP"
+var testName = "[Suite: cluster] Full Cluster Creation Flow"
 var _ = ginkgo.Describe(testName,
     ginkgo.Label(labels.Tier0),
     func() { ... }
@@ -317,7 +317,7 @@ make build
 ### Create Resource from Payload
 
 ```go
-cluster, err := h.Client.CreateClusterFromPayload(ctx, "testdata/payloads/clusters/gcp.json")
+cluster, err := h.Client.CreateClusterFromPayload(ctx, "testdata/payloads/clusters/cluster-request.json")
 Expect(err).NotTo(HaveOccurred())
 ```
 

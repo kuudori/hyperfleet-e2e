@@ -1,10 +1,11 @@
 {
   "kind": "NodePool",
-  "name": "gpu-nodepool-{{.Random}}",
+  "name": "hp-np-{{.Random}}",
   "labels": {
+    "environment": "test",
+    "shard": "1",
     "workload": "gpu",
-    "tier": "compute",
-    "environment": "test"
+    "tier": "compute"
   },
   "spec": {
     "replicas": 2,

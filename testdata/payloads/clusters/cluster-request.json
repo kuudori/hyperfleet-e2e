@@ -2,7 +2,7 @@
   "kind": "Cluster",
   "name": "hp-cluster-{{.Random}}",
   "labels": {
-    "environment": "production",
+    "environment": "test",
     "shard": "1",
     "team": "platform"
   },
