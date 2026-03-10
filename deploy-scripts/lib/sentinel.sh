@@ -13,7 +13,7 @@ install_sentinel_instance() {
     local resource_type="$1"  # "clusters" or "nodepools"
 
     local component_name="Sentinel (${resource_type})"
-    local release_name="${RELEASE_PREFIX}-sentinel-${resource_type}"
+    local release_name="sentinel-${NAMESPACE}-${resource_type}"
     local full_chart_path="${WORK_DIR}/sentinel/${SENTINEL_CHART_PATH}"
 
     log_section "Installing ${component_name}"
@@ -64,7 +64,7 @@ install_sentinel_instance() {
     # This enables the sentinel to include ownerReferences from the Kubernetes resource
     # in the message data sent to adapters, which is required for nodepools management
     if [[ "${resource_type}" == "nodepools" ]]; then
-        helm_cmd+=(--set "config.message_data.owner_references=.owner_references")
+        helm_cmd+=(--set "config.messageData.owner_references=resource.owner_references")
     fi
 
     log_info "Executing: ${helm_cmd[*]}"
@@ -106,7 +106,7 @@ uninstall_sentinel_instance() {
     fi
 
     local component_name="Sentinel (${resource_type_display})"
-    local release_name="${RELEASE_PREFIX}-sentinel-${resource_type}"
+    local release_name="sentinel-${NAMESPACE}-${resource_type}"
 
     log_section "Uninstalling ${component_name}"
 

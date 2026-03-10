@@ -1,14 +1,14 @@
 adapterConfig:
   create: true
   files:
-    adapter-config.yaml: clusters-cl-namespace/adapter-config.yaml
+    adapter-config.yaml: cl-namespace/adapter-config.yaml
   log:
     level: debug
 
 adapterTaskConfig:
   create: true
   files:
-    task-config.yaml: clusters-cl-namespace/adapter-task-config.yaml
+    task-config.yaml: cl-namespace/adapter-task-config.yaml
 
 broker:
   create: true

@@ -95,7 +95,9 @@ adapters:
   # List of adapter names that must be present and have correct conditions
   # when validating cluster adapter execution
   #
-  # Can be overridden by: HYPERFLEET_ADAPTERS_CLUSTER (comma-separated)
+  # Can be overridden by (comma-separated):
+  #   - HYPERFLEET_ADAPTERS_CLUSTER
+  #   - API_ADAPTERS_CLUSTER
   cluster:
     - "cl-namespace"
     - "cl-job"
@@ -105,6 +107,8 @@ adapters:
   # List of adapter names that must be present and have correct conditions
   # when validating nodepool adapter execution
   #
-  # Can be overridden by: HYPERFLEET_ADAPTERS_NODEPOOL (comma-separated)
+  # Can be overridden by (comma-separated):
+  #   - HYPERFLEET_ADAPTERS_NODEPOOL
+  #   - API_ADAPTERS_NODEPOOL
   nodepool:
     - "np-configmap"

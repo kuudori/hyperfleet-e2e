@@ -11,19 +11,17 @@
 install_api() {
     log_section "Installing API"
 
-    local release_name="${RELEASE_PREFIX}-api"
+    local release_name="api-${NAMESPACE}"
     local full_chart_path="${WORK_DIR}/api/${API_CHART_PATH}"
 
-    # Auto-discover adapters from testdata/adapter-configs
-    local discovered_cluster_adapters
-    local discovered_nodepool_adapters
+    # Use API_ADAPTERS_* environment variables for API configuration
+    # These should be set dynamically based on specific test case requirements
+    local cluster_adapters="${API_ADAPTERS_CLUSTER:-}"
+    local nodepool_adapters="${API_ADAPTERS_NODEPOOL:-}"
 
-    discovered_cluster_adapters=$(get_adapters_by_type "clusters")
-    discovered_nodepool_adapters=$(get_adapters_by_type "nodepools")
-
-    # Use discovered adapters if available, otherwise fall back to env vars
-    local cluster_adapters="${discovered_cluster_adapters:-${API_ADAPTERS_CLUSTER}}"
-    local nodepool_adapters="${discovered_nodepool_adapters:-${API_ADAPTERS_NODEPOOL}}"
+    log_info "API Adapter Configuration:"
+    log_info "  Cluster adapters: ${cluster_adapters:-<none>}"
+    log_info "  NodePool adapters: ${nodepool_adapters:-<none>}"
 
     if [[ "${DRY_RUN}" == "true" ]]; then
         log_info "[DRY-RUN] Would install API with:"
@@ -98,7 +96,7 @@ install_api() {
 uninstall_api() {
     log_section "Uninstalling API"
 
-    local release_name="${RELEASE_PREFIX}-api"
+    local release_name="api-${NAMESPACE}"
 
     # Check if release exists
     if [[ -z "$(helm list -n "${NAMESPACE}" -q -f "^${release_name}$")" ]]; then

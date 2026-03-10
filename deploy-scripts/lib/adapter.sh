@@ -3,31 +3,75 @@
 # adapter.sh - HyperFleet Adapter component deployment functions
 #
 # This module handles discovery, installation, and uninstallation of adapters
-# from the testdata/adapter-configs directory
+# from the ${ADAPTERS_FILE_DIR} directory (defaults to ${TESTDATA_DIR}/adapter-configs)
 
 # ============================================================================
 # Adapter Discovery Functions
 # ============================================================================
 
 discover_adapters() {
-    local adapter_configs_dir="${TESTDATA_DIR}/adapter-configs"
+    # Use ADAPTERS_FILE_DIR env var, fallback to default
+    local adapter_configs_dir="${ADAPTERS_FILE_DIR:-${TESTDATA_DIR}/adapter-configs}"
 
     if [[ ! -d "${adapter_configs_dir}" ]]; then
         log_verbose "Adapter configs directory not found: ${adapter_configs_dir}" >&2
         return 1
     fi
 
-    # Find all directories matching clusters-* or nodepools-* pattern
+    # Read adapter names from environment variables
+    local cluster_adapters="${CLUSTER_TIER0_ADAPTERS_DEPLOYMENT:-}"
+    local nodepool_adapters="${NODEPOOL_TIER0_ADAPTERS_DEPLOYMENT:-}"
+
+    if [[ -z "${cluster_adapters}" && -z "${nodepool_adapters}" ]]; then
+        log_error "No adapters specified. Set CLUSTER_TIER0_ADAPTERS_DEPLOYMENT and/or NODEPOOL_TIER0_ADAPTERS_DEPLOYMENT" >&2
+        return 1
+    fi
+
+    # Build list of adapter directories from environment variables
     local adapter_dirs=()
-    while IFS= read -r -d '' dir; do
-        local basename=$(basename "$dir")
-        if [[ "$basename" =~ ^(clusters|nodepools)- ]]; then
-            adapter_dirs+=("$basename")
-        fi
-    done < <(find "${adapter_configs_dir}" -mindepth 1 -maxdepth 1 -type d -print0)
+
+    # Add cluster adapters
+    if [[ -n "${cluster_adapters}" ]]; then
+        IFS=',' read -ra cluster_adapter_array <<< "${cluster_adapters}"
+        for adapter_name in "${cluster_adapter_array[@]}"; do
+            # Trim whitespace
+            adapter_name=$(echo "${adapter_name}" | xargs)
+            # Validate adapter name is not empty (prevents issues from trailing commas)
+            if [[ -z "${adapter_name}" ]]; then
+                log_error "Empty adapter name in CLUSTER_TIER0_ADAPTERS_DEPLOYMENT (check for trailing commas)" >&2
+                return 1
+            fi
+            if [[ -d "${adapter_configs_dir}/${adapter_name}" ]]; then
+                adapter_dirs+=("clusters|${adapter_name}")
+            else
+                log_error "Cluster adapter directory not found: ${adapter_configs_dir}/${adapter_name}" >&2
+                return 1
+            fi
+        done
+    fi
+
+    # Add nodepool adapters
+    if [[ -n "${nodepool_adapters}" ]]; then
+        IFS=',' read -ra nodepool_adapter_array <<< "${nodepool_adapters}"
+        for adapter_name in "${nodepool_adapter_array[@]}"; do
+            # Trim whitespace
+            adapter_name=$(echo "${adapter_name}" | xargs)
+            # Validate adapter name is not empty (prevents issues from trailing commas)
+            if [[ -z "${adapter_name}" ]]; then
+                log_error "Empty adapter name in NODEPOOL_TIER0_ADAPTERS_DEPLOYMENT (check for trailing commas)" >&2
+                return 1
+            fi
+            if [[ -d "${adapter_configs_dir}/${adapter_name}" ]]; then
+                adapter_dirs+=("nodepools|${adapter_name}")
+            else
+                log_error "NodePool adapter directory not found: ${adapter_configs_dir}/${adapter_name}" >&2
+                return 1
+            fi
+        done
+    fi
 
     if [[ ${#adapter_dirs[@]} -eq 0 ]]; then
-        log_verbose "No adapter configurations found (no clusters-* or nodepools-* directories)" >&2
+        log_verbose "No adapter configurations found" >&2
         return 1
     fi
 
@@ -37,53 +81,8 @@ discover_adapters() {
     done
 
     # Export for use in other functions
+    # Format: resource_type|adapter_name (e.g., "clusters|cl-namespace")
     printf '%s\n' "${adapter_dirs[@]}"
-}
-
-get_adapters_by_type() {
-    local resource_type="$1"  # "clusters" or "nodepools"
-    local adapter_configs_dir="${TESTDATA_DIR}/adapter-configs"
-
-    if [[ ! -d "${adapter_configs_dir}" ]]; then
-        return 1
-    fi
-
-    # Find all directories matching the resource type pattern
-    local adapter_names=()
-    while IFS= read -r -d '' dir; do
-        local basename=$(basename "$dir")
-        if [[ "$basename" =~ ^${resource_type}-(.+)$ ]]; then
-            # Extract just the adapter name (everything after "clusters-" or "nodepools-")
-            local adapter_name="${BASH_REMATCH[1]}"
-            adapter_names+=("${adapter_name}")
-        fi
-    done < <(find "${adapter_configs_dir}" -mindepth 1 -maxdepth 1 -type d -print0)
-
-    if [[ ${#adapter_names[@]} -eq 0 ]]; then
-        return 1
-    fi
-
-    # Return comma-separated list
-    local IFS=','
-    echo "${adapter_names[*]}"
-}
-
-parse_adapter_name() {
-    local dir_name="$1"
-
-    # Extract resource_type and adapter_name
-    # Format: <resource_type>-<adapter_name>
-    # Examples: clusters-example1-namespace, nodepools-namespace
-
-    if [[ "$dir_name" =~ ^(clusters|nodepools)-(.+)$ ]]; then
-        local resource_type="${BASH_REMATCH[1]}"
-        local adapter_name="${BASH_REMATCH[2]}"
-
-        echo "${resource_type}|${adapter_name}"
-    else
-        log_error "Invalid adapter directory name format: ${dir_name}"
-        return 1
-    fi
 }
 
 # ============================================================================
@@ -95,25 +94,25 @@ install_adapter_instance() {
 
     log_section "Installing Adapter: ${dir_name}"
 
-    # Parse adapter name
-    local parsed
-    if ! parsed=$(parse_adapter_name "${dir_name}"); then
-        log_error "Failed to parse adapter directory name: ${dir_name}"
+    # Extract resource_type and adapter_name from format: resource_type|adapter_name
+    local resource_type="${dir_name%%|*}"
+    local adapter_name="${dir_name##*|}"
+
+    # Validate the descriptor format and ensure both parts are non-empty
+    if [[ -z "${resource_type}" || -z "${adapter_name}" || "${dir_name}" != *"|"* ]]; then
+        log_error "Invalid adapter descriptor '${dir_name}'. Expected format: resource_type|adapter_name"
         return 1
     fi
-
-    local resource_type="${parsed%%|*}"
-    local adapter_name="${parsed##*|}"
 
     log_info "Resource type: ${resource_type}"
     log_info "Adapter name: ${adapter_name}"
 
     # Construct release name
-    local release_name="${RELEASE_PREFIX}-adapter-${resource_type}-${adapter_name}"
+    local release_name="adapter-${NAMESPACE}-${resource_type}-${adapter_name}"
 
-    # Source adapter config directory
-    local adapter_configs_dir="${TESTDATA_DIR}/adapter-configs"
-    local source_adapter_dir="${adapter_configs_dir}/${dir_name}"
+    # Source adapter config directory (using ADAPTERS_FILE_DIR env var)
+    local adapter_configs_dir="${ADAPTERS_FILE_DIR:-${TESTDATA_DIR}/adapter-configs}"
+    local source_adapter_dir="${adapter_configs_dir}/${adapter_name}"
 
     if [[ ! -d "${source_adapter_dir}" ]]; then
         log_error "Adapter config directory not found: ${source_adapter_dir}"
@@ -124,10 +123,15 @@ install_adapter_instance() {
     local full_chart_path="${WORK_DIR}/adapter/${ADAPTER_CHART_PATH}"
 
     # Copy adapter config folder to chart directory
-    local dest_adapter_dir="${full_chart_path}/${dir_name}"
+    local dest_adapter_dir="${full_chart_path}/${adapter_name}"
     log_info "Copying adapter config from ${source_adapter_dir} to ${dest_adapter_dir}"
 
     if [[ -d "${dest_adapter_dir}" ]]; then
+        # Safety check: ensure dest_adapter_dir contains adapter_name to prevent accidental deletion
+        if [[ "${dest_adapter_dir}" != *"${adapter_name}" || "${dest_adapter_dir}" == "/" || "${dest_adapter_dir}" == "${full_chart_path}" ]]; then
+            log_error "Safety check failed: refusing to delete suspicious path: ${dest_adapter_dir}"
+            return 1
+        fi
         log_verbose "Removing existing adapter config directory: ${dest_adapter_dir}"
         rm -rf "${dest_adapter_dir}"
     fi
@@ -171,6 +175,7 @@ install_adapter_instance() {
         --wait
         --timeout 5m
         -f "${values_file}"
+        --set "fullnameOverride=${release_name}"
         --set "image.registry=${IMAGE_REGISTRY}"
         --set "image.repository=${ADAPTER_IMAGE_REPO}"
         --set "image.tag=${ADAPTER_IMAGE_TAG}"
@@ -241,18 +246,21 @@ uninstall_adapter_instance() {
 
     log_section "Uninstalling Adapter: ${dir_name}"
 
-    # Parse adapter name
-    local parsed
-    if ! parsed=$(parse_adapter_name "${dir_name}"); then
-        log_error "Failed to parse adapter directory name: ${dir_name}"
+    # Extract resource_type and adapter_name from format: resource_type|adapter_name
+    local resource_type="${dir_name%%|*}"
+    local adapter_name="${dir_name##*|}"
+
+    # Validate the descriptor format and ensure both parts are non-empty
+    if [[ -z "${resource_type}" || -z "${adapter_name}" || "${dir_name}" != *"|"* ]]; then
+        log_error "Invalid adapter descriptor '${dir_name}'. Expected format: resource_type|adapter_name"
         return 1
     fi
 
-    local resource_type="${parsed%%|*}"
-    local adapter_name="${parsed##*|}"
+    log_info "Resource type: ${resource_type}"
+    log_info "Adapter name: ${adapter_name}"
 
     # Construct release name
-    local release_name="${RELEASE_PREFIX}-adapter-${resource_type}-${adapter_name}"
+    local release_name="adapter-${NAMESPACE}-${resource_type}-${adapter_name}"
 
     # Check if release exists
     if ! helm list -n "${NAMESPACE}" 2>/dev/null | grep -q "^${release_name}"; then
@@ -296,6 +304,9 @@ uninstall_adapters() {
     done <<< "${adapters}"
 
     if [[ ${failed} -gt 0 ]]; then
-        log_warning "${failed} adapter(s) failed to uninstall"
+        log_error "${failed} adapter(s) failed to uninstall"
+        return 1
+    else
+        log_success "All adapters uninstalled successfully"
     fi
 }

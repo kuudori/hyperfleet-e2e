@@ -144,7 +144,7 @@ This test validates that multiple nodepools can be created under the same cluste
 for i in 1 2 3; do
   curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
     -H "Content-Type: application/json" \
-    -d @testdata/payloads/nodepools/gcp.json
+    -d @testdata/payloads/nodepools/nodepool-request.json
 done
 ```
 
