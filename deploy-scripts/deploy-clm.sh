@@ -422,7 +422,7 @@ perform_install() {
         # Display API external IP if available
         if [[ "${INSTALL_API}" == "true" ]]; then
             local external_ip
-            external_ip=$(kubectl get svc "api-${NAMESPACE}" -n "${NAMESPACE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            external_ip=$(kubectl get svc "hyperfleet-api" -n "${NAMESPACE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
             if [[ -n "${external_ip}" ]]; then
                 echo
                 log_info "HyperFleet API External IP: ${external_ip}"

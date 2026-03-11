@@ -108,7 +108,7 @@ install_adapter_instance() {
     log_info "Adapter name: ${adapter_name}"
 
     # Construct release name
-    local release_name="adapter-${NAMESPACE}-${resource_type}-${adapter_name}"
+    local release_name="adapter-${resource_type}-${adapter_name}"
 
     # Source adapter config directory (using ADAPTERS_FILE_DIR env var)
     local adapter_configs_dir="${ADAPTERS_FILE_DIR:-${TESTDATA_DIR}/adapter-configs}"
@@ -260,7 +260,7 @@ uninstall_adapter_instance() {
     log_info "Adapter name: ${adapter_name}"
 
     # Construct release name
-    local release_name="adapter-${NAMESPACE}-${resource_type}-${adapter_name}"
+    local release_name="adapter-${resource_type}-${adapter_name}"
 
     # Check if release exists
     if ! helm list -n "${NAMESPACE}" 2>/dev/null | grep -q "^${release_name}"; then
