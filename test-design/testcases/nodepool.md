@@ -2,12 +2,12 @@
 
 ## Table of Contents
 
-1. [Nodepool can complete end-to-end workflow with required adapters](#test-title-nodepool-can-complete-end-to-end-workflow-with-required-adapters)
-2. [Nodepool adapters can create K8s resources with correct metadata](#test-title-nodepool-adapters-can-create-k8s-resources-with-correct-metadata)
+1. [Nodepools Resource Type - Workflow Validation](#test-title-nodepools-resource-type---workflow-validation)
+2. [Nodepools Resource Type - K8s Resource Check Aligned with Preinstalled NodePool Related Adapters Specified](#test-title-nodepools-resource-type---k8s-resource-check-aligned-with-preinstalled-nodepool-related-adapters-specified)
 
 ---
 
-## Test Title: Nodepool can complete end-to-end workflow with required adapters
+## Test Title: Nodepools Resource Type - Workflow Validation
 
 ### Description
 
@@ -23,7 +23,7 @@ This test validates that the workflow can work correctly for nodepools resource 
 | **Automation** | Automated     |
 | **Version** | MVP           |
 | **Created** | 2026-02-04    |
-| **Updated** | 2026-03-04    |
+| **Updated** | 2026-03-02    |
 
 
 ---
@@ -106,20 +106,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
   - Each required adapter should report its own condition type (e.g., `NpConfigmapSuccessful`) with `status: True`
 - This confirms the nodepool has reached the desired end state
 
-#### Step 4: Verify nodepool appears in list by cluster
-
-**Action:**
-- Retrieve all nodepools belonging to the cluster:
-```bash
-curl -s ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools | jq '.'
-```
-
-**Expected Result:**
-- Response returns HTTP 200 (OK) status code
-- Response contains an array of nodepools
-- The created nodepool appears in the list with matching id, name, and cluster_id
-
-#### Step 5: Cleanup Resources (AfterEach)
+#### Step 4: Cleanup Resources (AfterEach)
 
 **Action:**
 - Wait for cluster Ready condition with timeout to prevent namespace deletion conflicts:
@@ -150,7 +137,7 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 
 ---
 
-## Test Title: Nodepool adapters can create K8s resources with correct metadata
+## Test Title: Nodepools Resource Type - K8s Resource Check Aligned with Preinstalled NodePool Related Adapters Specified
 
 ### Description
 

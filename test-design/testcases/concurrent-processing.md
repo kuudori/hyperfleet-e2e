@@ -2,7 +2,7 @@
 
 ## Table of Contents
 
-1. [System can process concurrent cluster creations without resource conflicts](#test-title-system-can-process-concurrent-cluster-creations-without-event-loss-or-resource-conflicts)
+1. [System can process concurrent cluster creations without resource conflicts](#test-title-system-can-process-concurrent-cluster-creations-without-resource-conflicts)
 2. [Multiple nodepools can coexist under same cluster without conflicts](#test-title-multiple-nodepools-can-coexist-under-same-cluster-without-conflicts)
 
 ---
