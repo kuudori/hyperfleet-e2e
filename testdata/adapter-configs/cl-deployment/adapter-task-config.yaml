@@ -1,136 +1,130 @@
 # Simple valid HyperFleet Adapter Configuration for testing
 
-apiVersion: hyperfleet.redhat.com/v1alpha1
-kind: AdapterTaskConfig
-metadata:
-  name: cl-deployment
-  labels:
-    hyperfleet.io/adapter-type: cl-deployment
-    hyperfleet.io/component: adapter
-spec:
-  # Parameters with all required variables
-  params:
-    - name: "clusterId"
-      source: "event.id"
-      type: "string"
-      required: true
+# Parameters with all required variables
+params:
+  - name: "clusterId"
+    source: "event.id"
+    type: "string"
+    required: true
 
-  # Preconditions with valid operators and CEL expressions
-  preconditions:
-    - name: "clusterStatus"
-      apiCall:
-        method: "GET"
-        url: "/clusters/{{ .clusterId }}"
-        timeout: 10s
-        retryAttempts: 3
-        retryBackoff: "exponential"
-      capture:
-        - name: "clusterName"
-          field: "name"
-        - name: "generationSpec"
-          field: "generation"
-        - name: "readyConditionStatus"
-          expression: |
-            status.conditions.filter(c, c.type == "Ready").size() > 0
-              ? status.conditions.filter(c, c.type == "Ready")[0].status
-              : "False"
-      # Structured conditions with valid operators
-      conditions:
-        - field: "readyConditionStatus"
-          operator: "equals"
-          value: "False"
+# Preconditions with valid operators and CEL expressions
+preconditions:
+  - name: "clusterStatus"
+    api_call:
+      method: "GET"
+      url: "/clusters/{{ .clusterId }}"
+      timeout: 10s
+      retry_attempts: 3
+      retry_backoff: "exponential"
+    capture:
+      - name: "clusterName"
+        field: "name"
+      - name: "generationSpec"
+        field: "generation"
+      - name: "readyConditionStatus"
+        expression: |
+          status.conditions.filter(c, c.type == "Ready").size() > 0
+            ? status.conditions.filter(c, c.type == "Ready")[0].status
+            : "False"
+    # Structured conditions with valid operators
+    conditions:
+      - field: "readyConditionStatus"
+        operator: "equals"
+        value: "False"
 
-    - name: "clusterAdapterStatus"
-      apiCall:
-        method: "GET"
+  - name: "clusterAdapterStatus"
+    api_call:
+      method: "GET"
+      url: "/clusters/{{ .clusterId }}/statuses"
+      timeout: 10s
+      retry_attempts: 3
+      retry_backoff: "exponential"
+    capture:
+      - name: "clusterJobStatus"
+        field: "{.items[?(@.adapter=='cl-job')].conditions[?(@.type=='Available')].status}"
+    conditions:
+      - field: "clusterJobStatus"
+        operator: "equals"
+        value: "True"
+
+# Resources with valid K8s manifests
+resources:
+  - name: "testDeployment"
+    transport:
+      client: "kubernetes"
+    manifest:
+      ref: "/etc/adapter/deployment.yaml"
+    discovery:
+      namespace: "{{ .clusterId }}"
+      by_selectors:
+        label_selector:
+          hyperfleet.io/resource-type: "deployment"
+          hyperfleet.io/cluster-id: "{{ .clusterId }}"
+
+# Post-processing with valid CEL expressions
+post:
+  payloads:
+    - name: "clusterStatusPayload"
+      build:
+        adapter: "{{ .adapter.name }}"
+        conditions:
+          # Applied: Deployment successfully created
+          - type: "Applied"
+            status:
+              expression: |
+                has(resources.testDeployment) ? "True" : "False"
+            reason:
+              expression: |
+                has(resources.testDeployment)
+                  ? "DeploymentApplied"
+                  : "DeploymentPending"
+            message:
+              expression: |
+                has(resources.testDeployment)
+                  ? "testDeployment manifest applied successfully"
+                  : "testDeployment is pending to be applied"
+          # Available: Check deployment status conditions
+          - type: "Available"
+            status:
+              expression: |
+                has(resources.testDeployment) ?
+                 ( resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Available")
+                  ? resources.testDeployment.status.conditions.filter(c, c.type == "Available")[0].status : "Unknown")
+                 : "Unknown"
+            reason:
+              expression: |
+                resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Available")
+                  ? resources.testDeployment.status.conditions.filter(c, c.type == "Available")[0].reason
+                  : resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Progressing" && c.status == "False") ? "DeploymentFailed"
+                       : resources.?testDeployment.?status.hasValue() ? "DeploymentInProgress" : "DeploymentPending"
+            message:
+              expression: |
+                resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Available")
+                  ? resources.testDeployment.status.conditions.filter(c, c.type == "Available")[0].message
+                  : resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Progressing" && c.status == "False") ? "Deployment failed"
+                       : resources.?testDeployment.?status.hasValue() ? "Deployment in progress" : "Deployment is pending"
+          # Health: Adapter execution status (runtime)
+          - type: "Health"
+            status:
+              expression: |
+                adapter.?executionStatus.orValue("") == "success" ? "True" : "False"
+            reason:
+              expression: |
+                adapter.?errorReason.orValue("") != "" ? adapter.?errorReason.orValue("") : "Healthy"
+            message:
+              expression: |
+                adapter.?errorMessage.orValue("") != "" ? adapter.?errorMessage.orValue("") : "All adapter operations in progress or completed successfully"
+        # Event generation ID metadata field needs to use expression to avoid interpolation issues
+        observed_generation:
+          expression: "generationSpec"
+        observed_time: "{{ now | date \"2006-01-02T15:04:05Z07:00\" }}"
+
+  post_actions:
+    - name: "reportClusterStatus"
+      api_call:
+        method: "POST"
         url: "/clusters/{{ .clusterId }}/statuses"
-        timeout: 10s
-        retryAttempts: 3
-        retryBackoff: "exponential"
-      capture:
-        - name: "clusterJobStatus"
-          field: "{.items[?(@.adapter=='cl-job')].conditions[?(@.type=='Available')].status}"
-      conditions:
-        - field: "clusterJobStatus"
-          operator: "equals"
-          value: "True"
-
-  # Resources with valid K8s manifests
-  resources:
-    - name: "testDeployment"
-      manifest:
-        ref: "/etc/adapter/deployment.yaml"
-      discovery:
-        namespace: "{{ .clusterId }}"
-        bySelectors:
-          labelSelector:
-            hyperfleet.io/resource-type: "deployment"
-            hyperfleet.io/cluster-id: "{{ .clusterId }}"
-
-  # Post-processing with valid CEL expressions
-  post:
-    payloads:
-      - name: "clusterStatusPayload"
-        build:
-          adapter: "{{ .metadata.name }}"
-          conditions:
-            # Applied: Deployment successfully created
-            - type: "Applied"
-              status:
-                expression: |
-                  has(resources.testDeployment) ? "True" : "False"
-              reason:
-                expression: |
-                  has(resources.testDeployment)
-                    ? "DeploymentApplied"
-                    : "DeploymentPending"
-              message:
-                expression: |
-                  has(resources.testDeployment)
-                    ? "testDeployment manifest applied successfully"
-                    : "testDeployment is pending to be applied"
-            # Available: Check deployment status conditions
-            - type: "Available"
-              status:
-                expression: |
-                  has(resources.testDeployment) ?
-                   ( resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Available")
-                    ? resources.testDeployment.status.conditions.filter(c, c.type == "Available")[0].status : "Unknown")
-                   : "Unknown"
-              reason:
-                expression: |
-                  resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Available")
-                    ? resources.testDeployment.status.conditions.filter(c, c.type == "Available")[0].reason
-                    : resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Progressing" && c.status == "False") ? "DeploymentFailed"
-                         : resources.?testDeployment.?status.hasValue() ? "DeploymentInProgress" : "DeploymentPending"
-              message:
-                expression: |
-                  resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Available")
-                    ? resources.testDeployment.status.conditions.filter(c, c.type == "Available")[0].message
-                    : resources.?testDeployment.?status.?conditions.orValue([]).exists(c, c.type == "Progressing" && c.status == "False") ? "Deployment failed"
-                         : resources.?testDeployment.?status.hasValue() ? "Deployment in progress" : "Deployment is pending"
-            # Health: Adapter execution status (runtime)
-            - type: "Health"
-              status:
-                expression: |
-                  adapter.?executionStatus.orValue("") == "success" ? "True" : "False"
-              reason:
-                expression: |
-                  adapter.?errorReason.orValue("") != "" ? adapter.?errorReason.orValue("") : "Healthy"
-              message:
-                expression: |
-                  adapter.?errorMessage.orValue("") != "" ? adapter.?errorMessage.orValue("") : "All adapter operations in progress or completed successfully"
-          # Event generation ID metadata field needs to use expression to avoid interpolation issues
-          observed_generation:
-            expression: "generationSpec"
-          observed_time: "{{ now | date \"2006-01-02T15:04:05Z07:00\" }}"
-
-    postActions:
-      - name: "reportClusterStatus"
-        apiCall:
-          method: "POST"
-          url: "/clusters/{{ .clusterId }}/statuses"
-          headers:
-            - name: "Content-Type"
-              value: "application/json"
-          body: "{{ .clusterStatusPayload }}"
+        headers:
+          - name: "Content-Type"
+            value: "application/json"
+        body: "{{ .clusterStatusPayload }}"
