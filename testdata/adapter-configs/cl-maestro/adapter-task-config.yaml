@@ -41,7 +41,6 @@ preconditions:
             : "False"
       - name: "placementClusterName"
         expression: "\"cluster1\""  # TBC coming from placement adapter
-        description: "Unique identifier for the target maestro"
 
 
     # Structured conditions with valid operators
