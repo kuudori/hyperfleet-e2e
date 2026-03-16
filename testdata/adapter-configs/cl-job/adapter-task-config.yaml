@@ -10,6 +10,11 @@ params:
     source: "env.JOB_SLEEP_DURATION"
     type: "string"
     default: "15"
+  - name: "TTL_EXPIRY_THRESHOLD"
+    source: "env.TTL_EXPIRY_THRESHOLD"
+    type: "int"
+    required: false
+    default: 300
 
 # Preconditions with valid operators and CEL expressions
 preconditions:
@@ -27,21 +32,23 @@ preconditions:
         field: "generation"
       - name: "simulateResult"     # possible values: success (default), failure, hang, crash, invalid-json, missing-status
         field: "simulateResult"
-      - name: "readyConditionStatus"
+      - name: "clusterNotReady"
         expression: |
           status.conditions.filter(c, c.type == "Ready").size() > 0
-            ? status.conditions.filter(c, c.type == "Ready")[0].status
-            : "False"
-    # Structured conditions with valid operators
-    conditions:
-      - field: "readyConditionStatus"
-        operator: "equals"
-        value: "False"
+            ? status.conditions.filter(c, c.type == "Ready")[0].status != "True"
+            : true
+      - name: "clusterReadyTTL"
+        expression: |
+          (timestamp(now()) - timestamp(
+            status.conditions.filter(c, c.type == "Ready").size() > 0
+              ? status.conditions.filter(c, c.type == "Ready")[0].last_transition_time
+              : now()
+          )).getSeconds() >= 300
 
   - name: "validationCheck"
-    # Valid CEL expression
+    # Precondition passes if cluster is NOT Ready OR if cluster is Ready and stable for >300 seconds since last transition (enables self-healing)
     expression: |
-      readyConditionStatus == "False"
+      clusterNotReady || clusterReadyTTL
 
   - name: "clusterAdapterStatus"
     api_call:
