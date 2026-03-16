@@ -55,20 +55,20 @@ install_api() {
     )
 
     # Add adapter configurations (always set both, use empty if not discovered)
-    # The API chart requires both adapters.cluster and adapters.nodepool to be set
+    # The API chart requires both config.adapters.required.cluster and config.adapters.required.nodepool to be set
     if [[ -n "${cluster_adapters}" ]]; then
-        helm_cmd+=(--set "adapters.cluster={${cluster_adapters}}")
+        helm_cmd+=(--set "config.adapters.required.cluster={${cluster_adapters}}")
         log_verbose "Cluster adapters (API): ${cluster_adapters}"
     else
-        helm_cmd+=(--set "adapters.cluster={}")
+        helm_cmd+=(--set "config.adapters.required.cluster={}")
         log_verbose "Cluster adapters (API): none"
     fi
 
     if [[ -n "${nodepool_adapters}" ]]; then
-        helm_cmd+=(--set "adapters.nodepool={${nodepool_adapters}}")
+        helm_cmd+=(--set "config.adapters.required.nodepool={${nodepool_adapters}}")
         log_verbose "Nodepool adapters (API): ${nodepool_adapters}"
     else
-        helm_cmd+=(--set "adapters.nodepool={}")
+        helm_cmd+=(--set "config.adapters.required.nodepool={}")
         log_verbose "Nodepool adapters (API): none"
     fi
 

@@ -24,7 +24,7 @@ broker:
 
 image:
   registry: CHANGE_ME
-  repository: hyperfleet-adapter
+  repository: ci/hyperfleet-adapter
   pullPolicy: Always
   tag: latest
 
