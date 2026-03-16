@@ -95,12 +95,12 @@ test-coverage: test ## Run tests and generate HTML coverage report
 
 .PHONY: e2e
 e2e: build ## Run all E2E tests
-	./$(BINARY_NAME) test
+	TESTDATA_DIR=$(PWD)/testdata ./$(BINARY_NAME) test
 
 .PHONY: e2e-ci
 e2e-ci: build ## Run E2E tests with CI configuration
 	mkdir -p $(OUTPUT_DIR)
-	./$(BINARY_NAME) test --configs ci --junit-report $(OUTPUT_DIR)/junit.xml
+	TESTDATA_DIR=$(PWD)/testdata ./$(BINARY_NAME) test --configs ci --junit-report $(OUTPUT_DIR)/junit.xml
 
 ##@ Code Quality
 

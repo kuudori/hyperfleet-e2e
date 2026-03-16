@@ -70,7 +70,7 @@ This test validates the complete Maestro transport happy path: creating a cluste
 | **Pos/Neg** | Positive |
 | **Priority** | Tier0 |
 | **Status** | Draft |
-| **Automation** | Not Automated |
+| **Automation** | Automated |
 | **Version** | MVP |
 | **Created** | 2026-02-12 |
 | **Updated** | 2026-03-02 |
@@ -430,7 +430,7 @@ This test validates that the adapter can route ManifestWorks to different Maestr
 | **Pos/Neg** | Positive |
 | **Priority** | Tier1 |
 | **Status** | Draft |
-| **Automation** | Not Automated |
+| **Automation** | Automated |
 | **Version** | MVP |
 | **Created** | 2026-02-12 |
 | **Updated** | 2026-02-26 |

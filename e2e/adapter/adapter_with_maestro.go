@@ -28,7 +28,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 		ginkgo.BeforeEach(func(ctx context.Context) {
 			h = helper.New()
 			// Create cluster for all tests in this suite
-			cluster, err := h.Client.CreateClusterFromPayload(ctx, "testdata/payloads/clusters/cluster-request.json")
+			cluster, err := h.Client.CreateClusterFromPayload(ctx, h.TestDataPath("payloads/clusters/cluster-request.json"))
 			Expect(err).NotTo(HaveOccurred(), "failed to create cluster")
 			Expect(cluster.Id).NotTo(BeNil(), "cluster ID should be generated")
 			Expect(cluster.Name).NotTo(BeEmpty(), "cluster name should be present")

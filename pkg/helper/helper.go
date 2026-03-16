@@ -3,6 +3,7 @@ package helper
 import (
     "context"
     "fmt"
+    "path/filepath"
 
     "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
     "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
@@ -18,6 +19,12 @@ type Helper struct {
     Client        *client.HyperFleetClient
     K8sClient     *k8sclient.Client
     MaestroClient *maestro.Client
+}
+
+// TestDataPath resolves a relative path within the testdata directory
+// This ensures testdata paths work correctly whether invoked via go test or the e2e binary
+func (h *Helper) TestDataPath(relativePath string) string {
+    return filepath.Join(h.Cfg.TestDataDir, relativePath)
 }
 
 // GetTestCluster creates a new temporary test cluster

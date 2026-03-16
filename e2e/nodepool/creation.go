@@ -27,12 +27,12 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 
 			// Get or create cluster for nodepool tests
 			var err error
-			clusterID, err = h.GetTestCluster(ctx, "testdata/payloads/clusters/cluster-request.json")
+			clusterID, err = h.GetTestCluster(ctx, h.TestDataPath("payloads/clusters/cluster-request.json"))
 			Expect(err).NotTo(HaveOccurred(), "failed to get test cluster")
 			ginkgo.GinkgoWriter.Printf("Using cluster ID: %s\n", clusterID)
 
 			// Create nodepool for all tests in this suite
-			nodepool, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, "testdata/payloads/nodepools/nodepool-request.json")
+			nodepool, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, h.TestDataPath("payloads/nodepools/nodepool-request.json"))
 			Expect(err).NotTo(HaveOccurred(), "failed to create nodepool")
 			Expect(nodepool.Id).NotTo(BeNil(), "nodepool ID should be generated")
 			Expect(nodepool.Name).NotTo(BeEmpty(), "nodepool name should be present")

@@ -40,6 +40,7 @@ vendor/
 *.bak
 *.log
 .deploy-work/
+.test-work/
 
 # Environment files
 .env

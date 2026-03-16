@@ -1,0 +1,149 @@
+# Test adapter configuration with invalid K8s resource to test error detection
+
+# Parameters with all required variables
+params:
+    - name: "clusterId"
+      source: "event.id"
+      type: "string"
+      required: true
+    - name: "testRunId"
+      source: "env.TEST_RUN_ID"
+      type: "string"
+      required: false
+      default: "TEST_RUN_ID"
+    - name: "ci"
+      source: "env.CI"
+      type: "string"
+      required: false
+      default: "false"
+
+# Preconditions with valid operators and CEL expressions
+preconditions:
+  - name: "clusterStatus"
+    api_call:
+      method: "GET"
+      url: "/clusters/{{ .clusterId }}"
+      timeout: 10s
+      retry_attempts: 3
+      retry_backoff: "exponential"
+    capture:
+      - name: "clusterName"
+        field: "name"
+      - name: "generationSpec"
+        field: "generation"
+      - name: "readyConditionStatus"
+        expression: |
+          status.conditions.filter(c, c.type == "Ready").size() > 0
+            ? status.conditions.filter(c, c.type == "Ready")[0].status
+            : "False"
+    # Structured conditions with valid operators
+    conditions:
+      - field: "readyConditionStatus"
+        operator: "equals"
+        value: "False"
+
+  - name: "validationCheck"
+    # Valid CEL expression
+    expression: |
+      readyConditionStatus == "False"
+
+# Resources with INVALID K8s manifest - this will cause API server rejection
+resources:
+  - name: "invalidConfigMap"
+    transport:
+      client: "kubernetes"
+    manifest:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        # Invalid name: contains uppercase letters which violate DNS-1123 subdomain naming rules
+        name: "INVALID-NAME-{{ .clusterId }}"
+        namespace: "{{ .clusterId }}"
+        labels:
+          hyperfleet.io/cluster-id: "{{ .clusterId }}"
+          hyperfleet.io/cluster-name: "{{ .clusterName }}"
+          e2e.hyperfleet.io/test-run-id: "{{ .testRunId }}"
+          e2e.hyperfleet.io/ci: "{{ .ci }}"
+          e2e.hyperfleet.io/managed-by: "test-framework"
+        annotations:
+          hyperfleet.io/generation: "{{ .generationSpec }}"
+      data:
+        test-key: "test-value"
+    discovery:
+      namespace: "{{ .clusterId }}"
+      by_selectors:
+        label_selector:
+          hyperfleet.io/cluster-id: "{{ .clusterId }}"
+
+# Post-processing to report the status (will report failure)
+post:
+  payloads:
+    - name: "clusterStatusPayload"
+      build:
+        adapter: "{{ .adapter.name }}"
+        conditions:
+          # Applied: Resource creation attempt
+          - type: "Applied"
+            status:
+              expression: |
+                resources.?invalidConfigMap.?metadata.?name.orValue("") != "" ? "True" : "False"
+            reason:
+              expression: |
+                resources.?invalidConfigMap.?metadata.?name.orValue("") != ""
+                  ? "ResourceCreated"
+                  : "ResourceFailed"
+            message:
+              expression: |
+                resources.?invalidConfigMap.?metadata.?name.orValue("") != ""
+                  ? "ConfigMap created successfully"
+                  : "ConfigMap creation failed"
+          # Available: Check resource readiness
+          - type: "Available"
+            status:
+              expression: |
+                resources.?invalidConfigMap.?metadata.?name.orValue("") != "" ? "True" : "False"
+            reason:
+              expression: |
+                adapter.?errorReason.orValue("") != ""
+                  ? adapter.?errorReason.orValue("")
+                  : (resources.?invalidConfigMap.?metadata.?name.orValue("") != ""
+                      ? "ResourceReady"
+                      : "ResourceNotReady")
+            message:
+              expression: |
+                adapter.?errorMessage.orValue("") != ""
+                  ? adapter.?errorMessage.orValue("")
+                  : (resources.?invalidConfigMap.?metadata.?name.orValue("") != ""
+                      ? "ConfigMap is ready"
+                      : "ConfigMap is not ready")
+          # Health: Adapter execution status (runtime)
+          - type: "Health"
+            status:
+              expression: |
+                adapter.?executionStatus.orValue("") == "success" ? "True" : "False"
+            reason:
+              expression: |
+                adapter.?errorReason.orValue("") != "" ? adapter.?errorReason.orValue("") : "Healthy"
+            message:
+              expression: |
+                adapter.?errorMessage.orValue("") != "" ? adapter.?errorMessage.orValue("") : "All adapter operations completed successfully"
+        # Event generation ID metadata field needs to use expression to avoid interpolation issues
+        observed_generation:
+          expression: "generationSpec"
+        observed_time: "{{ now | date \"2006-01-02T15:04:05Z07:00\" }}"
+
+        data:
+          configmap:
+            name:
+              expression: |
+                resources.?invalidConfigMap.?metadata.?name.orValue("")
+
+  post_actions:
+    - name: "reportClusterStatus"
+      api_call:
+        method: "POST"
+        url: "/clusters/{{ .clusterId }}/statuses"
+        headers:
+          - name: "Content-Type"
+            value: "application/json"
+        body: "{{ .clusterStatusPayload }}"
