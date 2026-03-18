@@ -10,4 +10,6 @@ const (
 const (
 	ResourceTypeClusters  = "clusters"
 	ResourceTypeNodepools = "nodepools"
+
+	defaultGCPProjectID = "hcm-hyperfleet"
 )

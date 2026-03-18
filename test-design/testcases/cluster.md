@@ -356,11 +356,11 @@ This test validates that the end-to-end workflow correctly handles adapter failu
 |-----------|-----------|
 | **Pos/Neg** | Negative |
 | **Priority** | Tier1 |
-| **Status** | Draft |
-| **Automation** | Not Automated |
+| **Status** | Automated |
+| **Automation** | Automated |
 | **Version** | MVP |
 | **Created** | 2026-02-11 |
-| **Updated** | 2026-03-12 |
+| **Updated** | 2026-03-19 |
 
 
 ---

@@ -396,6 +396,40 @@ func expandEnvVarsInYAMLToBytes(ctx context.Context, yamlPath string) ([]byte, e
 	return stdout.Bytes(), nil
 }
 
+// DeletePubSubSubscription deletes a Google Pub/Sub subscription.
+// If the subscription does not exist, it is treated as a no-op.
+func (h *Helper) DeletePubSubSubscription(ctx context.Context, subscriptionID string) error {
+	projectID := h.Cfg.GCPProjectID
+	if projectID == "" {
+		projectID = defaultGCPProjectID
+	}
+
+	logger.Info("deleting Pub/Sub subscription",
+		"subscription", subscriptionID,
+		"project", projectID)
+
+	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(cmdCtx, "gcloud", "pubsub", "subscriptions", "delete",
+		subscriptionID,
+		"--project="+projectID,
+		"--quiet")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		outputStr := string(output)
+		if strings.Contains(outputStr, "NOT_FOUND") || strings.Contains(outputStr, "not found") {
+			logger.Info("Pub/Sub subscription not found, skipping deletion", "subscription", subscriptionID)
+			return nil
+		}
+		return fmt.Errorf("failed to delete Pub/Sub subscription %s: %w (output: %s)", subscriptionID, err, outputStr)
+	}
+
+	logger.Info("Pub/Sub subscription deleted successfully", "subscription", subscriptionID)
+	return nil
+}
+
 // copyDir recursively copies a directory tree
 func copyDir(src, dst string) error {
 	// Get source directory info
