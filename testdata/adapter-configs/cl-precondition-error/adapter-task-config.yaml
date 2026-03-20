@@ -91,13 +91,23 @@ post:
           - type: "Health"
             status:
               expression: |
-                adapter.?executionStatus.orValue("") == "success" ? "True" : "False"
+                adapter.?executionStatus.orValue("") == "success" && !adapter.?resourcesSkipped.orValue(false) ? "True" : "False"
             reason:
               expression: |
-                adapter.?errorReason.orValue("") != "" ? adapter.?errorReason.orValue("") : "Healthy"
+                adapter.?executionStatus.orValue("") != "success"
+                  ? "ExecutionFailed"
+                  : adapter.?errorReason.orValue("") != ""
+                    ? adapter.?errorReason.orValue("")
+                    : adapter.?resourcesSkipped.orValue(false)
+                      ? "ResourcesSkipped"
+                      : "Healthy"
             message:
               expression: |
-                adapter.?errorMessage.orValue("") != "" ? adapter.?errorMessage.orValue("") : "All adapter operations completed successfully"
+                adapter.?errorMessage.orValue("") != ""
+                  ? adapter.?errorMessage.orValue("")
+                  : adapter.?resourcesSkipped.orValue(false)
+                    ? "Resources skipped: " + adapter.?skipReason.orValue("unknown reason")
+                    : "All adapter operations completed successfully"
         observed_generation:
           expression: "1"
         observed_time: "{{ now | date \"2006-01-02T15:04:05Z07:00\" }}"
