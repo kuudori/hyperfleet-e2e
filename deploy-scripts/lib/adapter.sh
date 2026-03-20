@@ -107,8 +107,27 @@ install_adapter_instance() {
   log_info "Resource type: ${resource_type}"
   log_info "Adapter name: ${adapter_name}"
 
-  # Construct release name
-  local release_name="adapter-${resource_type}-${adapter_name}"
+  # Generate random suffix to prevent namespace conflicts
+  local random_suffix
+  random_suffix=$(head /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | head -c 8)
+
+  # Construct release name with random suffix
+  # Kubernetes resource names have a 63-character limit
+  # Reserve ~15 characters for Helm's deployment/pod suffixes
+  local max_release_name_length=48
+  local base_without_suffix="adapter-${resource_type}-${adapter_name}"
+
+  # Calculate max base length (reserve space for "-" + suffix)
+  local max_base_length=$((max_release_name_length - ${#random_suffix} - 1))
+
+  # Truncate base if necessary, but always keep the suffix
+  if [[ ${#base_without_suffix} -gt ${max_base_length} ]]; then
+    base_without_suffix="${base_without_suffix:0:${max_base_length}}"
+    log_warning "Release name base truncated to ${max_base_length} chars to stay within Kubernetes limits"
+  fi
+
+  local release_name="${base_without_suffix}-${random_suffix}"
+  log_info "Release name (with random suffix): ${release_name} (length: ${#release_name})"
 
   # Source adapter config directory (using ADAPTERS_FILE_DIR env var)
   local adapter_configs_dir="${ADAPTERS_FILE_DIR:-${TESTDATA_DIR}/adapter-configs}"
@@ -165,7 +184,7 @@ install_adapter_instance() {
   fi
 
 
-  # Build helm command
+  # Build helm command with labels to track adapter metadata
   local helm_cmd=(
     helm upgrade --install
     "${release_name}"
@@ -185,6 +204,7 @@ install_adapter_instance() {
     --set "broker.googlepubsub.subscriptionId=${subscription_id}"
     --set "broker.googlepubsub.topic=${topic}"
     --set "broker.googlepubsub.deadLetterTopic=${dead_letter_topic}"
+    --labels "adapter-resource-type=${resource_type},adapter-name=${adapter_name}"
   )
 
   log_info "Executing Helm command:"
@@ -200,12 +220,36 @@ install_adapter_instance() {
       log_success "Adapter ${adapter_name} for ${resource_type} is running and healthy"
     else
       log_error "Adapter ${adapter_name} for ${resource_type} deployment failed health check"
-      log_info "Checking pod logs for troubleshooting:"
-      kubectl logs -n "${NAMESPACE}" -l "app.kubernetes.io/instance=${release_name}" --tail=50 2>/dev/null || true
+
+      # Capture debug logs before cleanup
+      local debug_log_dir="${DEBUG_LOG_DIR:-${WORK_DIR}/debug-logs}"
+      capture_debug_logs "${NAMESPACE}" "app.kubernetes.io/instance=${release_name}" "${release_name}" "${debug_log_dir}"
+
+      # Cleanup failed deployment
+      log_warning "Cleaning up failed adapter deployment: ${release_name}"
+      if helm uninstall "${release_name}" -n "${NAMESPACE}" --wait --timeout 5m; then
+        log_info "Failed adapter deployment cleaned up successfully"
+      else
+        log_warning "Failed to cleanup adapter deployment, it may need manual cleanup"
+      fi
       return 1
     fi
   else
     log_error "Failed to install adapter ${adapter_name} for ${resource_type}"
+
+    # Check if release was created (partial deployment) and cleanup
+    if helm list -n "${NAMESPACE}" 2>/dev/null | grep -q "^${release_name}"; then
+      # Capture debug logs before cleanup
+      local debug_log_dir="${DEBUG_LOG_DIR:-${WORK_DIR}/debug-logs}"
+      capture_debug_logs "${NAMESPACE}" "app.kubernetes.io/instance=${release_name}" "${release_name}" "${debug_log_dir}"
+
+      log_warning "Cleaning up failed adapter deployment: ${release_name}"
+      if helm uninstall "${release_name}" -n "${NAMESPACE}" --wait --timeout 5m; then
+        log_info "Failed adapter deployment cleaned up successfully"
+      else
+        log_warning "Failed to cleanup adapter deployment, it may need manual cleanup"
+      fi
+    fi
     return 1
   fi
 }
@@ -259,29 +303,47 @@ uninstall_adapter_instance() {
   log_info "Resource type: ${resource_type}"
   log_info "Adapter name: ${adapter_name}"
 
-  # Construct release name
-  local release_name="adapter-${resource_type}-${adapter_name}"
+  # Find all releases by searching for Helm labels (avoids pattern matching issues with truncated names)
+  log_info "Searching for releases with labels: adapter-resource-type=${resource_type}, adapter-name=${adapter_name}"
+  local matching_releases
+  matching_releases=$(helm list -n "${NAMESPACE}" --selector "adapter-resource-type=${resource_type},adapter-name=${adapter_name}" -q 2>/dev/null)
 
-  # Check if release exists
-  if ! helm list -n "${NAMESPACE}" 2>/dev/null | grep -q "^${release_name}"; then
-    log_warning "Release '${release_name}' not found in namespace '${NAMESPACE}'"
-    return 0
+  if [[ -z "${matching_releases}" ]]; then
+    # Fallback: search by name prefix for releases created before labels were added
+    log_info "No releases found with labels. Trying fallback search by name prefix..."
+    local name_prefix="adapter-${resource_type}-${adapter_name}"
+    matching_releases=$(helm list -n "${NAMESPACE}" -q 2>/dev/null | grep "^${name_prefix}" || true)
+
+    if [[ -z "${matching_releases}" ]]; then
+      log_warning "No releases found for adapter-resource-type=${resource_type}, adapter-name=${adapter_name} in namespace '${NAMESPACE}'"
+      return 0
+    else
+      log_info "Found releases using name prefix fallback: ${matching_releases}"
+    fi
   fi
 
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log_info "[DRY-RUN] Would uninstall adapter (release: ${release_name})"
-    return 0
-  fi
+  # Uninstall all matching releases
+  local uninstall_errors=0
+  while IFS= read -r release_name; do
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      log_info "[DRY-RUN] Would uninstall adapter (release: ${release_name})"
+    else
+      log_info "Uninstalling adapter ${adapter_name} for ${resource_type} (release: ${release_name})..."
+      log_info "Executing: helm uninstall ${release_name} -n ${NAMESPACE} --wait --timeout 5m"
 
-  log_info "Uninstalling adapter ${adapter_name} for ${resource_type}..."
-  log_info "Executing: helm uninstall ${release_name} -n ${NAMESPACE} --wait --timeout 5m"
+      if helm uninstall "${release_name}" -n "${NAMESPACE}" --wait --timeout 5m; then
+        log_success "Adapter ${adapter_name} for ${resource_type} (release: ${release_name}) uninstalled successfully"
+      else
+        log_error "Failed to uninstall adapter ${adapter_name} for ${resource_type} (release: ${release_name})"
+        ((uninstall_errors++))
+      fi
+    fi
+  done <<< "${matching_releases}"
 
-  if helm uninstall "${release_name}" -n "${NAMESPACE}" --wait --timeout 5m; then
-    log_success "Adapter ${adapter_name} for ${resource_type} uninstalled successfully"
-  else
-    log_error "Failed to uninstall adapter ${adapter_name} for ${resource_type}"
+  if [[ ${uninstall_errors} -gt 0 ]]; then
     return 1
   fi
+  return 0
 }
 
 uninstall_adapters() {

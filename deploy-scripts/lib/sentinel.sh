@@ -78,12 +78,36 @@ install_sentinel_instance() {
             log_success "${component_name} is running and healthy"
         else
             log_error "${component_name} deployment failed health check"
-            log_info "Checking pod logs for troubleshooting:"
-            kubectl logs -n "${NAMESPACE}" -l "app.kubernetes.io/instance=${release_name}" --tail=50 2>/dev/null || true
+
+            # Capture debug logs before cleanup
+            local debug_log_dir="${DEBUG_LOG_DIR:-${WORK_DIR}/debug-logs}"
+            capture_debug_logs "${NAMESPACE}" "app.kubernetes.io/instance=${release_name}" "${release_name}" "${debug_log_dir}"
+
+            # Cleanup failed deployment
+            log_warning "Cleaning up failed ${component_name} deployment: ${release_name}"
+            if helm uninstall "${release_name}" -n "${NAMESPACE}" --wait --timeout 5m; then
+                log_info "Failed ${component_name} deployment cleaned up successfully"
+            else
+                log_warning "Failed to cleanup ${component_name} deployment, it may need manual cleanup"
+            fi
             return 1
         fi
     else
         log_error "Failed to install ${component_name}"
+
+        # Check if release was created (partial deployment) and cleanup
+        if helm list -n "${NAMESPACE}" 2>/dev/null | grep -q "^${release_name}"; then
+            # Capture debug logs before cleanup
+            local debug_log_dir="${DEBUG_LOG_DIR:-${WORK_DIR}/debug-logs}"
+            capture_debug_logs "${NAMESPACE}" "app.kubernetes.io/instance=${release_name}" "${release_name}" "${debug_log_dir}"
+
+            log_warning "Cleaning up failed ${component_name} deployment: ${release_name}"
+            if helm uninstall "${release_name}" -n "${NAMESPACE}" --wait --timeout 5m; then
+                log_info "Failed ${component_name} deployment cleaned up successfully"
+            else
+                log_warning "Failed to cleanup ${component_name} deployment, it may need manual cleanup"
+            fi
+        fi
         return 1
     fi
 }

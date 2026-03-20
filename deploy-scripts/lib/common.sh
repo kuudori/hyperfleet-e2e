@@ -185,6 +185,93 @@ verify_pod_health() {
 }
 
 # ============================================================================
+# Debug Log Capture
+# ============================================================================
+
+capture_debug_logs() {
+    local namespace="$1"
+    local selector="$2"
+    local component_name="$3"
+    local output_dir="${4:-${WORK_DIR:-${PWD}}/debug-logs}"
+    local capture_failed=false
+
+    log_section "Capturing Debug Logs for ${component_name}"
+
+    # Create output directory
+    if ! mkdir -p "${output_dir}"; then
+        log_error "Failed to create debug log directory: ${output_dir}"
+        return 1
+    fi
+
+    local timestamp
+    timestamp=$(date +"%Y%m%d-%H%M%S")
+    local log_prefix="${output_dir}/${component_name}-${timestamp}-$$-${RANDOM}"
+
+    log_info "Saving debug logs to: ${log_prefix}-*"
+
+    # Capture pod logs
+    log_info "Capturing pod logs..."
+    kubectl logs -n "${namespace}" -l "${selector}" --all-containers=true --prefix=true > "${log_prefix}-pods.log" 2>&1 || { log_warning "Failed to capture current pod logs"; capture_failed=true; }
+
+    # Capture previous pod logs (for crashed containers)
+    log_info "Capturing previous pod logs..."
+    kubectl logs -n "${namespace}" -l "${selector}" --all-containers=true --prefix=true --previous > "${log_prefix}-pods-previous.log" 2>&1 || true
+
+    # Capture pod descriptions
+    log_info "Capturing pod descriptions..."
+    kubectl describe pods -n "${namespace}" -l "${selector}" > "${log_prefix}-pods-describe.txt" 2>&1 || { log_warning "Failed to capture pod descriptions"; capture_failed=true; }
+
+    # Capture pod status
+    log_info "Capturing pod status..."
+    kubectl get pods -n "${namespace}" -l "${selector}" -o wide > "${log_prefix}-pods-status.txt" 2>&1 || { log_warning "Failed to capture pod status"; capture_failed=true; }
+    kubectl get pods -n "${namespace}" -l "${selector}" -o yaml > "${log_prefix}-pods-yaml.yaml" 2>&1 || { log_warning "Failed to capture pod YAML"; capture_failed=true; }
+
+    # Capture events
+    log_info "Capturing namespace events..."
+    kubectl get events -n "${namespace}" --sort-by='.lastTimestamp' > "${log_prefix}-events.txt" 2>&1 || { log_warning "Failed to capture namespace events"; capture_failed=true; }
+
+    # Capture deployment/statefulset status if exists
+    log_info "Capturing deployment/statefulset status..."
+    kubectl get deployments,statefulsets -n "${namespace}" -l "${selector}" -o wide > "${log_prefix}-workloads-status.txt" 2>&1 || { log_warning "Failed to capture workload status"; capture_failed=true; }
+    kubectl get deployments,statefulsets -n "${namespace}" -l "${selector}" -o yaml > "${log_prefix}-workloads-yaml.yaml" 2>&1 || { log_warning "Failed to capture workload YAML"; capture_failed=true; }
+
+    # Capture services and endpoints
+    log_info "Capturing services and endpoints..."
+    kubectl get svc,endpoints -n "${namespace}" -l "${selector}" -o wide > "${log_prefix}-network.txt" 2>&1 || { log_warning "Failed to capture services and endpoints"; capture_failed=true; }
+
+    # Create a summary file
+    cat > "${log_prefix}-summary.txt" <<EOF
+Debug Log Capture Summary
+=========================
+Component: ${component_name}
+Namespace: ${namespace}
+Selector: ${selector}
+Timestamp: ${timestamp}
+
+Files Generated:
+- ${log_prefix}-pods.log (current pod logs)
+- ${log_prefix}-pods-previous.log (previous pod logs for crashed containers)
+- ${log_prefix}-pods-describe.txt (pod descriptions)
+- ${log_prefix}-pods-status.txt (pod status)
+- ${log_prefix}-pods-yaml.yaml (pod YAML manifests)
+- ${log_prefix}-events.txt (namespace events)
+- ${log_prefix}-workloads-status.txt (deployment/statefulset status)
+- ${log_prefix}-workloads-yaml.yaml (deployment/statefulset YAML manifests)
+- ${log_prefix}-network.txt (services and endpoints)
+EOF
+
+    if [[ "${capture_failed}" == "true" ]]; then
+        log_warning "Debug logs captured with partial failures"
+        return 1
+    fi
+    log_success "Debug logs captured successfully"
+    log_info "Debug log location: ${output_dir}/"
+    log_info "Log prefix: ${component_name}-${timestamp}-*"
+
+    return 0
+}
+
+# ============================================================================
 # Namespace Management
 # ============================================================================
 

@@ -98,6 +98,9 @@ DELETE_K8S_RESOURCES="${DELETE_K8S_RESOURCES:-false}"
 DELETE_CLOUD_RESOURCES="${DELETE_CLOUD_RESOURCES:-false}"
 DELETE_ALL="${DELETE_ALL:-false}"
 
+# Debug logging
+DEBUG_LOG_DIR="${DEBUG_LOG_DIR:-${PROJECT_ROOT}/.debug-work}"
+
 # ============================================================================
 # Load Library Modules
 # ============================================================================
@@ -162,6 +165,8 @@ OPTIONAL FLAGS:
     # Execution Options
     --dry-run                       Print commands without executing
     --verbose                       Enable verbose logging
+    --debug-log-dir <path>          Directory to save debug logs on deployment failures
+                                    (default: ${WORK_DIR}/debug-logs)
     --help                          Show this help message
 
 ENVIRONMENT VARIABLES:
@@ -321,6 +326,10 @@ parse_arguments() {
             --verbose)
                 VERBOSE=true
                 shift
+                ;;
+            --debug-log-dir)
+                DEBUG_LOG_DIR="$2"
+                shift 2
                 ;;
             --help|-h)
                 print_usage
