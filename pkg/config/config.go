@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -231,6 +232,13 @@ func applyViperValues(v reflect.Value, prefix string) {
 			if field.Type().Elem().Kind() == reflect.String {
 				if viper.IsSet(configPath) {
 					viperVal := viper.GetStringSlice(configPath)
+					if len(viperVal) == 1 && strings.Contains(viperVal[0], ",") {
+						viperVal = strings.Split(viperVal[0], ",")
+						// Trim whitespace from each element
+						for i := range viperVal {
+							viperVal[i] = strings.TrimSpace(viperVal[i])
+						}
+					}
 					if len(viperVal) > 0 {
 						field.Set(reflect.ValueOf(viperVal))
 					}

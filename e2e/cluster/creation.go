@@ -2,7 +2,6 @@ package cluster
 
 import (
     "context"
-    "fmt"
     "time"
 
     "github.com/onsi/ginkgo/v2"
@@ -177,11 +176,14 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
         })
 
         ginkgo.Describe("K8s Resources Check Aligned with Preinstalled Clusters Related Adapters Specified", func() {
-            // This test validates Kubernetes resource creation for all configured adapters:
+            // This test validates Kubernetes resource creation for adapters that create K8s resources:
             // 1. Direct K8s resource verification for each adapter (namespace, job, deployment)
             // 2. Validation of resource metadata (labels, annotations) and status
             // 3. Final cluster state verification
-            ginkgo.It("should create Kubernetes resources with correct templated values for all required adapters",
+            //
+            // Note: Not all adapters create K8s resources (e.g., cl-maestro interacts with Maestro service).
+            // Adapters without K8s resources are verified via adapter status in "Basic Workflow Validation" test.
+            ginkgo.It("should create Kubernetes resources with correct templated values for adapters that create K8s resources",
                 func(ctx context.Context) {
                     ginkgo.By("Verify Kubernetes resources for each required adapter")
 
@@ -222,13 +224,9 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
                         },
                     }
 
-                    // Verify K8s resources for each configured adapter using Eventually
-                    for _, adapterName := range h.Cfg.Adapters.Cluster {
-                        verifier, exists := adapterResourceVerifiers[adapterName]
-                        if !exists {
-                            ginkgo.Fail(fmt.Sprintf("No K8s resource verifier defined for adapter %s - test configuration error", adapterName))
-                        }
-
+                    // Verify K8s resources only for adapters that have verifiers defined
+                    // This explicitly tests only adapters that create K8s resources
+                    for adapterName, verifier := range adapterResourceVerifiers {
                         ginkgo.By("Verifying Kubernetes resource for adapter: " + adapterName)
                         Eventually(func() error {
                             return verifier()
