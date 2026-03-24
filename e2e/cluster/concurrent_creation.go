@@ -157,6 +157,7 @@ var _ = ginkgo.Describe("[Suite: cluster][concurrent] System can process concurr
 			}
 
 			ginkgo.By(fmt.Sprintf("Cleaning up %d test clusters", len(clusterIDs)))
+			var cleanupErrors []error
 			for _, clusterID := range clusterIDs {
 				// Wait for cluster Ready before cleanup to prevent namespace deletion conflicts
 				// Without this, adapters may still be creating resources during cleanup
@@ -172,9 +173,12 @@ var _ = ginkgo.Describe("[Suite: cluster][concurrent] System can process concurr
 				}
 
 				ginkgo.By("cleaning up cluster " + clusterID)
-				err = h.CleanupTestCluster(ctx, clusterID)
-				Expect(err).NotTo(HaveOccurred(), "failed to cleanup cluster %s", clusterID)
+				if err := h.CleanupTestCluster(ctx, clusterID); err != nil {
+					ginkgo.GinkgoWriter.Printf("ERROR: failed to cleanup cluster %s: %v\n", clusterID, err)
+					cleanupErrors = append(cleanupErrors, err)
+				}
 			}
+			Expect(cleanupErrors).To(BeEmpty(), "some clusters failed to cleanup")
 		})
 	},
 )
