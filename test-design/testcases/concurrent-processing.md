@@ -19,11 +19,11 @@ This test validates that the system can handle multiple cluster creation request
 |-----------|-----------|
 | **Pos/Neg** | Positive |
 | **Priority** | Tier1 |
-| **Status** | Draft |
-| **Automation** | Not Automated |
+| **Status** | Automated |
+| **Automation** | Automated |
 | **Version** | MVP |
 | **Created** | 2026-02-11 |
-| **Updated** | 2026-02-11 |
+| **Updated** | 2026-03-20 |
 
 
 ---
@@ -116,11 +116,11 @@ This test validates that multiple nodepools can be created under the same cluste
 |-----------|---------------|
 | **Pos/Neg** | Positive      |
 | **Priority** | Tier1         |
-| **Status** | Draft         |
-| **Automation** | Not Automated |
+| **Status** | Automated     |
+| **Automation** | Automated     |
 | **Version** | MVP           |
 | **Created** | 2026-02-11    |
-| **Updated** | 2026-03-04    |
+| **Updated** | 2026-03-24    |
 
 
 ---
@@ -139,13 +139,14 @@ This test validates that multiple nodepools can be created under the same cluste
 
 #### Step 1: Create multiple nodepools under the same cluster
 **Action:**
-- Submit 3 POST requests to create NodePool resources (each call generates a unique name via `{{.Random}}` template):
+- Submit 3 POST requests in parallel to create NodePool resources (each call generates a unique name via `{{.Random}}` template):
 ```bash
 for i in 1 2 3; do
   curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
     -H "Content-Type: application/json" \
-    -d @testdata/payloads/nodepools/nodepool-request.json
+    -d @testdata/payloads/nodepools/nodepool-request.json &
 done
+wait
 ```
 
 **Expected Result:**
