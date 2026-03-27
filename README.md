@@ -104,6 +104,7 @@ hyperfleet-e2e/
 - **[Getting Started](docs/getting-started.md)** - Run your first test in 10 minutes
 - **[Architecture](docs/architecture.md)** - Understand the framework design
 - **[Development](docs/development.md)** - Write new tests
+- **[HyperFleet Architecture](https://github.com/openshift-hyperfleet/hyperfleet/tree/main/docs)** - Project-wide architecture and standards
 
 ## CI/CD Integration
 
@@ -141,6 +142,9 @@ See [Development Guide](docs/development.md) for adding new tests.
 
 ## Contributing
 
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing guidelines, and contribution workflow.
+
+Quick start:
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes and add tests
