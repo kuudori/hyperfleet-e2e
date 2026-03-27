@@ -472,7 +472,7 @@ This test validates the system's self-healing capability. When an adapter crashe
 | **Automation** | Not Automated |
 | **Version** | MVP |
 | **Created** | 2026-02-11 |
-| **Updated** | 2026-03-12 |
+| **Updated** | 2026-03-27 |
 
 
 ---
@@ -481,17 +481,24 @@ This test validates the system's self-healing capability. When an adapter crashe
 
 1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
 2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
+3. The adapters defined in testdata/adapter-configs are all deployed successfully
 
 ---
 
 ### Test Steps
 
-#### Step 1: Deploy dedicated crash-adapter with pre-configured crash behavior
+#### Step 1: Deploy dedicated crash-adapter and then simulate crash
+
 **Action:**
-- Deploy a crash-adapter via Helm with `SIMULATE_RESULT=crash`, separate from the normal adapters used in other tests
+- Deploy a dedicated crash-adapter via Helm (`${ADAPTER_DEPLOYMENT_NAME}`), separate from the normal adapters used in other tests
+- Scale down the crash-adapter deployment to simulate a crash:
+```bash
+kubectl scale deployment ${ADAPTER_DEPLOYMENT_NAME} -n ${NAMESPACE} --replicas=0
+```
+- Wait briefly to ensure the adapter is fully stopped before proceeding to Step 2
 
 **Expected Result:**
-- crash-adapter is deployed and running successfully
+- crash-adapter becomes unavailable
 
 #### Step 2: Submit an API request to create a Cluster resource
 
@@ -509,42 +516,45 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
 #### Step 3: Verify crash-adapter has not reported status
 
 **Action:**
-- Check cluster adapter statuses via API:
+- Poll adapter statuses:
 ```bash
-curl -s ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses | jq '.items[].adapter'
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses
 ```
-- Check crash-adapter pod status:
+- Retrieve cluster status:
 ```bash
-kubectl get pods -n hyperfleet -l app.kubernetes.io/instance=crash-adapter --no-headers
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
 
 **Expected Result:**
-- API: statuses response does not contain an entry for `crash-adapter` (it crashed before reporting status)
-- kubectl: crash-adapter pod shows CrashLoopBackOff or Error state
+- Statuses response does not contain an entry for `crash-adapter` (it is unavailable)
+- Other required adapters have reported their statuses
+- Cluster `Ready` condition remains `status: "False"`
 
-#### Step 4: Restore crash-adapter to normal mode
-
-**Action:**
-- Upgrade crash-adapter Helm release with `SIMULATE_RESULT=success`
-
-**Expected Result:**
-- crash-adapter pod starts and remains Running
-
-#### Step 5: Verify adapter eventually reports correct status
+#### Step 4: Restore crash-adapter and verify cluster reaches correct status
 
 **Action:**
-- Poll crash-adapter status via API until it appears:
+- Scale up the crash-adapter deployment back to 1 replica:
 ```bash
-curl -s ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses \
-  | jq '.items[] | select(.adapter == "crash-adapter")'
+kubectl scale deployment ${ADAPTER_DEPLOYMENT_NAME} -n ${NAMESPACE} --replicas=1
+```
+- Poll adapter statuses until the crash-adapter reports:
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses
+```
+- Retrieve cluster status:
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
 
 **Expected Result:**
 - crash-adapter status entry is now present in the statuses response
 - crash-adapter reports all three condition types with `status: "True"`: `Applied`, `Available`, `Health`
 - `observed_generation` is set to `1`
+- Cluster `Ready` condition transitions to `status: "True"`
+- Cluster `Available` condition transitions to `status: "True"`
+- This confirms no cluster is left in an inconsistent state due to adapter failures
 
-#### Step 6: Cleanup Resources (AfterEach)
+#### Step 5: Cleanup Resources (AfterEach)
 
 **Action:**
 - Delete the namespace created for this cluster:
