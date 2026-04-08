@@ -57,7 +57,7 @@ install_sentinel_instance() {
     --set "config.resourceType=${resource_type}"
     --set "broker.type=${SENTINEL_BROKER_TYPE}"
     --set "broker.googlepubsub.projectId=${GCP_PROJECT_ID}"
-    --set "config.broker.googlepubsub.createTopicIfMissing=${SENTINEL_GOOGLEPUBSUB_CREATE_TOPIC_IF_MISSING}"
+    --set "broker.googlepubsub.createTopicIfMissing=${SENTINEL_GOOGLEPUBSUB_CREATE_TOPIC_IF_MISSING}"
   )
 
   # Add message_data.owner_references configuration for nodepools resource type
