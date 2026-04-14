@@ -41,7 +41,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 			ginkgo.GinkgoWriter.Printf("Created nodepool ID: %s, Name: %s\n", nodepoolID, nodepoolName)
 		})
 
-		ginkgo.Describe("Basic Workflow Validation", func() {
+		ginkgo.Describe("Basic Workflow Validation", ginkgo.Label(labels.Tier0), func() {
 			// This test validates the end-to-end nodepool lifecycle workflow:
 			// 1. Initial condition validation (Ready=False, Available=False)
 			// 2. Required adapter execution with comprehensive metadata validation
@@ -194,7 +194,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 				})
 		})
 
-		ginkgo.Describe("K8s Resources Check Aligned with Preinstalled NodePool Related Adapters Specified", func() {
+		ginkgo.Describe("K8s Resources Check Aligned with Preinstalled NodePool Related Adapters Specified", ginkgo.Label(labels.Tier0), func() {
 			// This test validates Kubernetes resource creation for all configured adapters:
 			// 1. Direct K8s resource verification for each adapter (configmap)
 			// 2. Validation of resource metadata (labels, annotations) and status

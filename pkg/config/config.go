@@ -106,6 +106,14 @@ type AdapterDeploymentConfig struct {
 	ImageTag      string `yaml:"imageTag" mapstructure:"imageTag"`
 }
 
+// APIDeploymentConfig contains configuration for the API Helm chart used in tier2 tests
+// (e.g., upgrading required adapters config during crash recovery).
+type APIDeploymentConfig struct {
+	ChartRepo string `yaml:"chartRepo" mapstructure:"chartRepo"`
+	ChartRef  string `yaml:"chartRef" mapstructure:"chartRef"`
+	ChartPath string `yaml:"chartPath" mapstructure:"chartPath"`
+}
+
 // Config represents the e2e test configuration
 type Config struct {
 	Namespace         string                  `yaml:"namespace" mapstructure:"namespace"`
@@ -118,6 +126,7 @@ type Config struct {
 	Log               LogConfig               `yaml:"log" mapstructure:"log"`
 	Adapters          AdaptersConfig          `yaml:"adapters" mapstructure:"adapters"`
 	AdapterDeployment AdapterDeploymentConfig `yaml:"adapterDeployment" mapstructure:"adapterDeployment"`
+	APIDeployment     APIDeploymentConfig     `yaml:"apiDeployment" mapstructure:"apiDeployment"`
 }
 
 // APIConfig contains API-related configuration
@@ -370,6 +379,18 @@ func (c *Config) applyDefaults() {
 	if c.AdapterDeployment.ImageTag == "" {
 		c.AdapterDeployment.ImageTag = os.Getenv("ADAPTER_IMAGE_TAG")
 	}
+
+	// Apply API deployment values from environment variables or config file
+	// These are used by tier2 tests that need to upgrade API configuration
+	if c.APIDeployment.ChartRepo == "" {
+		c.APIDeployment.ChartRepo = os.Getenv("API_CHART_REPO")
+	}
+	if c.APIDeployment.ChartRef == "" {
+		c.APIDeployment.ChartRef = os.Getenv("API_CHART_REF")
+	}
+	if c.APIDeployment.ChartPath == "" {
+		c.APIDeployment.ChartPath = os.Getenv("API_CHART_PATH")
+	}
 }
 
 // Validate validates configuration with detailed error messages
@@ -410,6 +431,9 @@ func (c *Config) Display() {
 		"adapter_image_registry", valueOrNotSet(c.AdapterDeployment.ImageRegistry),
 		"adapter_image_repo", valueOrNotSet(c.AdapterDeployment.ImageRepo),
 		"adapter_image_tag", valueOrNotSet(c.AdapterDeployment.ImageTag),
+		"api_chart_repo", redactURL(c.APIDeployment.ChartRepo),
+		"api_chart_ref", valueOrNotSet(c.APIDeployment.ChartRef),
+		"api_chart_path", valueOrNotSet(c.APIDeployment.ChartPath),
 	)
 }
 

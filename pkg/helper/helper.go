@@ -118,8 +118,8 @@ func (h *Helper) CleanupTestCluster(ctx context.Context, clusterID string) error
 					jobs, _ := h.K8sClient.BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
 
 					if (pods != nil && len(pods.Items) > 0) ||
-					   (deployments != nil && len(deployments.Items) > 0) ||
-					   (jobs != nil && len(jobs.Items) > 0) {
+						(deployments != nil && len(deployments.Items) > 0) ||
+						(jobs != nil && len(jobs.Items) > 0) {
 						allClean = false
 						break
 					}
