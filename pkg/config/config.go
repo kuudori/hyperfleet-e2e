@@ -385,8 +385,13 @@ func (c *Config) applyDefaults() {
 	if c.APIDeployment.ChartRepo == "" {
 		c.APIDeployment.ChartRepo = os.Getenv("API_CHART_REPO")
 	}
+	// ChartRef: from config file, API_CHART_REF env var, or fallback to adapter ref (same release branch)
 	if c.APIDeployment.ChartRef == "" {
-		c.APIDeployment.ChartRef = os.Getenv("API_CHART_REF")
+		if envVal := os.Getenv("API_CHART_REF"); envVal != "" {
+			c.APIDeployment.ChartRef = envVal
+		} else {
+			c.APIDeployment.ChartRef = c.AdapterDeployment.ChartRef
+		}
 	}
 	if c.APIDeployment.ChartPath == "" {
 		c.APIDeployment.ChartPath = os.Getenv("API_CHART_PATH")
