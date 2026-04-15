@@ -36,7 +36,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 			ginkgo.GinkgoWriter.Printf("Created cluster ID: %s, Name: %s\n", clusterID, clusterName)
 		})
 
-		ginkgo.Describe("Maestro Transport Happy Path", func() {
+		ginkgo.Describe("Maestro Transport Happy Path", ginkgo.Label(labels.Tier0), func() {
 			// This test validates the complete Maestro transport happy path:
 			// 1. Creating a cluster via HyperFleet API triggers adapter to create ManifestWork
 			// 2. ManifestWork is created on Maestro server with correct metadata
@@ -319,7 +319,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 				})
 		})
 
-		ginkgo.Describe("Maestro Generation-based Idempotency", func() {
+		ginkgo.Describe("Maestro Generation-based Idempotency", ginkgo.Label(labels.Tier0), func() {
 			// This test validates the generation-based idempotency mechanism:
 			// 1. When a ManifestWork does not exist, it should be created
 			// 2. When the same event is reprocessed with the same generation, the operation should be skipped

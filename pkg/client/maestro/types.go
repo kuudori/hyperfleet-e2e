@@ -7,13 +7,13 @@ type ResourceBundleList struct {
 
 // ResourceBundle represents a Maestro resource bundle (ManifestWork)
 type ResourceBundle struct {
-	ID              string            `json:"id"`
-	ConsumerName    string            `json:"consumer_name"`
-	Version         int               `json:"version"`
-	Metadata        Metadata          `json:"metadata"`
-	Manifests       []Manifest        `json:"manifests"`
-	ManifestConfigs []ManifestConfig  `json:"manifest_configs"`
-	DeleteOption    *DeleteOption     `json:"delete_option,omitempty"`
+	ID              string           `json:"id"`
+	ConsumerName    string           `json:"consumer_name"`
+	Version         int              `json:"version"`
+	Metadata        Metadata         `json:"metadata"`
+	Manifests       []Manifest       `json:"manifests"`
+	ManifestConfigs []ManifestConfig `json:"manifest_configs"`
+	DeleteOption    *DeleteOption    `json:"delete_option,omitempty"`
 }
 
 // DeleteOption represents the deletion options for a resource bundle

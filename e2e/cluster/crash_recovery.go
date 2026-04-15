@@ -49,26 +49,12 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reach Correct St
 
 			// Clone API Helm chart (needed to upgrade required adapters config)
 			ginkgo.By("Clone API Helm chart repository")
-			apiChartRepo := os.Getenv("API_CHART_REPO")
-			if apiChartRepo == "" {
-				apiChartRepo = "https://github.com/openshift-hyperfleet/hyperfleet-api.git"
-			}
-			apiChartRef := os.Getenv("API_CHART_REF")
-			if apiChartRef == "" {
-				apiChartRef = h.Cfg.AdapterDeployment.ChartRef
-			}
-			Expect(apiChartRef).NotTo(BeEmpty(), "API_CHART_REF must be set or ADAPTER_CHART_REF must be configured")
-			apiChartPathCfg := os.Getenv("API_CHART_PATH")
-			if apiChartPathCfg == "" {
-				apiChartPathCfg = "charts"
-			}
-
 			var cleanupAPIChart func() error
 			apiChartPath, cleanupAPIChart, err = h.CloneHelmChart(ctx, helper.HelmChartCloneOptions{
 				Component: "api",
-				RepoURL:   apiChartRepo,
-				Ref:       apiChartRef,
-				ChartPath: apiChartPathCfg,
+				RepoURL:   h.Cfg.APIDeployment.ChartRepo,
+				Ref:       h.Cfg.APIDeployment.ChartRef,
+				ChartPath: h.Cfg.APIDeployment.ChartPath,
 				WorkDir:   helper.TestWorkDir,
 			})
 			Expect(err).NotTo(HaveOccurred(), "failed to clone API Helm chart")
