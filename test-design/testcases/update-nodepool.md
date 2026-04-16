@@ -173,7 +173,7 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
 **Action:**
 ```bash
 curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
-  | jq '{generation, conditions, labels, spec}'
+  | jq '{id, cluster_id, generation, conditions, labels, spec}'
 curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}/statuses \
   | jq '[.items[] | {adapter, observed_generation, last_report_time}]'
 ```
@@ -216,7 +216,7 @@ curl -i -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{n
 **Action:**
 ```bash
 curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
-  | jq '{generation, conditions, labels, spec}'
+  | jq '{id, cluster_id, generation, conditions, labels, spec}'
 curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}/statuses \
   | jq '[.items[] | {adapter, observed_generation, last_report_time}]'
 ```

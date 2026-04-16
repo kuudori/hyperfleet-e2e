@@ -192,9 +192,12 @@ kubectl get configmaps -n {cluster_id} -l hyperfleet.io/nodepool-id
 #### Step 5: Cleanup resources
 
 **Action:**
-- For each nodepool created in Step 1, delete the nodepool and then the cluster via the API:
+- For each nodepool created in Step 1, delete the nodepool via the API:
 ```bash
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
+```
+- After all nodepools are deleted, delete the cluster via the API:
+```bash
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
 - Wait for hard-delete to complete

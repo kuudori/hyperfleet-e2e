@@ -873,6 +873,12 @@ echo "Adapter config restored successfully"
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
 ```
 
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace ${CLUSTER_ID} --ignore-not-found
+```
+
 **Expected Result:**
 - Cluster and all associated resources are cleaned up
 

@@ -411,7 +411,7 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 
 This test validates that the API rejects mutation requests (PATCH) to clusters that have been soft-deleted. Once a cluster has `deleted_time` set, no spec modifications should be allowed to prevent new generation events from triggering reconciliation while deletion cleanup is in progress.
 
-**Note:** The PATCH request schema only accepts `spec`, so `deleted_time` cannot be cleared via PATCH. However, a PATCH on a tombstoned resource bumps `generation`, creating a mismatch (`observed_generation < generation`) that blocks hard-delete until all adapters re-process and report at the new generation. The adapter's `lifecycle.delete.when` check short-circuits spec application (no K8s resources are recreated), but the unnecessary round-trip through Sentinel, adapter, and status reporting delays hard-delete completion. A 409 guard at the API boundary prevents this distributed churn entirely.
+**Note:** The PATCH request schema only accepts mutable fields (`spec`, `labels`), so `deleted_time` cannot be cleared via PATCH. However, a PATCH on a tombstoned resource bumps `generation`, creating a mismatch (`observed_generation < generation`) that blocks hard-delete until all adapters re-process and report at the new generation. The adapter's `lifecycle.delete.when` check short-circuits spec application (no K8s resources are recreated), but the unnecessary round-trip through Sentinel, adapter, and status reporting delays hard-delete completion. A 409 guard at the API boundary prevents this distributed churn entirely.
 
 **Status note:** This test case requires the API to implement a mutation guard for tombstoned resources. Until then, PATCH will succeed on soft-deleted resources.
 
