@@ -13,6 +13,8 @@
 9. [DELETE during initial creation before cluster reaches Ready](#test-title-delete-during-initial-creation-before-cluster-reaches-ready)
 10. [Simultaneous DELETE requests produce a single tombstone](#test-title-simultaneous-delete-requests-produce-a-single-tombstone)
 11. [Adapter treats externally-deleted K8s resources as finalized](#test-title-adapter-treats-externally-deleted-k8s-resources-as-finalized)
+12. [DELETE during update reconciliation before adapters converge](#test-title-delete-during-update-reconciliation-before-adapters-converge)
+13. [Recreate cluster with same name after hard-delete](#test-title-recreate-cluster-with-same-name-after-hard-delete)
 
 ---
 
@@ -1088,6 +1090,245 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 - If the test failed before hard-delete, fall back to API DELETE (if cluster still exists) and namespace deletion:
 ```bash
 kubectl delete namespace {cluster_id} --ignore-not-found
+```
+
+**Expected Result:**
+- All test resources are cleaned up
+
+---
+
+## Test Title: DELETE during update reconciliation before adapters converge
+
+### Description
+
+This test validates the interaction between update and delete workflows. When a cluster is updated via PATCH and immediately deleted before adapters finish reconciling the update, the deletion workflow must take priority. Adapters receive the next event, detect `deleted_time`, and switch to cleanup mode instead of continuing update reconciliation. This is distinct from "DELETE during initial creation" (test #9) because adapters already have `Applied=True` from the previous generation and are mid-reconciliation for the new generation — a different code path in the adapter's lifecycle handler.
+
+---
+
+| **Field** | **Value** |
+|-----------|-----------|
+| **Pos/Neg** | Positive |
+| **Priority** | Tier1 |
+| **Status** | Draft |
+| **Automation** | Not Automated |
+| **Version** | Post-MVP |
+| **Created** | 2026-04-16 |
+| **Updated** | 2026-04-16 |
+
+---
+
+### Preconditions
+
+1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
+2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
+3. The adapters defined in testdata/adapter-configs are all deployed successfully
+4. DELETE and PATCH endpoints are deployed and operational
+5. Reconciled status aggregation is implemented
+
+---
+
+### Test Steps
+
+#### Step 1: Create a cluster and wait for Ready state at generation 1
+
+**Action:**
+- Create a cluster and wait for full convergence:
+```bash
+curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
+  -H "Content-Type: application/json" \
+  -d @testdata/payloads/clusters/cluster-request.json
+```
+- Wait for `Reconciled` condition `status: "True"` at `generation: 1`
+
+**Expected Result:**
+- Cluster reaches `Reconciled: True`, `Ready: True` at `generation: 1`
+- All adapters report `Applied: True`, `observed_generation: 1`
+
+#### Step 2: Send PATCH request (do NOT wait for reconciliation to complete)
+
+**Action:**
+- Send a PATCH to trigger generation increment:
+```bash
+curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
+  -H "Content-Type: application/json" \
+  -d '{"labels": {"trigger-update": "true"}}'
+```
+
+**Expected Result:**
+- Response returns HTTP 200 with `generation: 2`
+- `Reconciled` transitions to `status: "False"` (adapters have not yet reconciled to generation 2)
+
+#### Step 3: Immediately send DELETE before update reconciliation completes
+
+**Action:**
+- Without waiting for adapters to reconcile to generation 2, send DELETE:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
+```
+
+**Expected Result:**
+- Response returns HTTP 202 (Accepted) with `deleted_time` set
+- `generation` incremented to 3
+
+#### Step 4: Verify adapters switch to deletion mode and finalize
+
+**Action:**
+- Poll adapter statuses until all adapters report `Finalized=True`:
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses
+```
+
+**Expected Result:**
+- All required adapters report `Finalized` condition `status: "True"`
+- `observed_generation: 3` (adapters reconciled the deletion generation, not the update generation)
+- `Applied` condition `status: "False"` (managed resources deleted)
+- `Available` condition `status: "False"` (work no longer active)
+- Adapters did not complete the update reconciliation for generation 2 — they detected `deleted_time` and switched to cleanup mode
+
+#### Step 5: Verify cluster is hard-deleted
+
+**Action:**
+- Poll until the cluster record is removed:
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
+```
+
+**Expected Result:**
+- Cluster `Reconciled` condition transitions to `status: "True"` (all adapters confirmed finalization)
+- Hard-delete executes: GET returns HTTP 404 (Not Found)
+
+#### Step 6: Cleanup resources
+
+**Action:**
+- If the cluster was not hard-deleted (test failed), fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
+```
+
+**Expected Result:**
+- All test resources are cleaned up
+
+---
+
+## Test Title: Recreate cluster with same name after hard-delete
+
+### Description
+
+This test validates that after a cluster is fully deleted (hard-deleted from the database), a new cluster can be created with the same name without conflicts. This is a common user scenario: delete a cluster, then recreate it with the same configuration. The system must ensure no state from the previous cluster (K8s namespace, adapter subscriptions, Sentinel state, database records) interferes with the new creation. The new cluster must reach `Reconciled=True` through a clean lifecycle, not inheriting or colliding with artifacts from the previous cluster.
+
+---
+
+| **Field** | **Value** |
+|-----------|-----------|
+| **Pos/Neg** | Positive |
+| **Priority** | Tier1 |
+| **Status** | Draft |
+| **Automation** | Not Automated |
+| **Version** | Post-MVP |
+| **Created** | 2026-04-16 |
+| **Updated** | 2026-04-16 |
+
+---
+
+### Preconditions
+
+1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
+2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
+3. The adapters defined in testdata/adapter-configs are all deployed successfully
+4. DELETE and hard-delete endpoints are deployed and operational
+5. Reconciled status aggregation is implemented
+
+---
+
+### Test Steps
+
+#### Step 1: Create a cluster and wait for Ready state
+
+**Action:**
+- Create a cluster using the standard payload (name is generated via `{{.Random}}` template):
+```bash
+curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
+  -H "Content-Type: application/json" \
+  -d @testdata/payloads/clusters/cluster-request.json
+```
+- Wait for `Reconciled` condition `status: "True"` at `generation: 1`
+- Record the `id` as `{first_cluster_id}` and the `name` as `{cluster_name}`
+
+**Expected Result:**
+- Cluster reaches `Reconciled: True`, `Ready: True`
+- All adapters report `Applied: True`
+
+#### Step 2: Delete the cluster and wait for hard-delete to complete
+
+**Action:**
+- Send DELETE request:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{first_cluster_id}
+```
+- Wait for hard-delete (poll until GET returns 404):
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{first_cluster_id}
+```
+
+**Expected Result:**
+- DELETE returns HTTP 202 with `deleted_time` set
+- Adapters report `Finalized: True`
+- Hard-delete completes: GET returns HTTP 404
+
+#### Step 3: Create a new cluster with the same name
+
+**Action:**
+- Create a cluster using the same payload, but override the `name` field with `{cluster_name}` captured in Step 1:
+```bash
+curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
+  -H "Content-Type: application/json" \
+  -d @testdata/payloads/clusters/cluster-request.json  # override name to {cluster_name}
+```
+- Record the `id` as `{second_cluster_id}`
+
+**Expected Result:**
+- Response returns HTTP 201 (Created)
+- `{second_cluster_id}` is a new UUID, different from `{first_cluster_id}`
+- `generation: 1` (fresh resource, not inheriting from the deleted cluster)
+
+#### Step 4: Verify the new cluster reaches Reconciled=True through a clean lifecycle
+
+**Action:**
+- Wait for the new cluster to reach `Reconciled: True`:
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{second_cluster_id}
+```
+- Verify adapter statuses:
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{second_cluster_id}/statuses
+```
+
+**Expected Result:**
+- Cluster `Reconciled` condition `status: "True"` at `generation: 1`
+- `Ready` condition `status: "True"`
+- All adapters report `Applied: True`, `Available: True`, `Health: True` with `observed_generation: 1`
+- No adapter errors related to pre-existing resources, duplicate subscriptions, or namespace conflicts
+
+#### Step 5: Verify the old cluster is still gone
+
+**Action:**
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{first_cluster_id}
+```
+
+**Expected Result:**
+- GET returns HTTP 404 (the old cluster was not resurrected by the recreate)
+
+#### Step 6: Cleanup resources
+
+**Action:**
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{second_cluster_id}
+```
+- Wait for hard-delete to complete (poll until GET returns 404).
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {second_cluster_id} --ignore-not-found
 ```
 
 **Expected Result:**
