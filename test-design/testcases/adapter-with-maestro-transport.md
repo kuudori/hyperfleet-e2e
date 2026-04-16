@@ -327,6 +327,12 @@ Example output:
 
 #### Step 7: Cleanup
 **Action:**
+- Delete the cluster via the API:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
+```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
 ```bash
 # Delete the namespace created by Maestro agent
 kubectl delete ns ${CLUSTER_ID}-${ADAPTER_NAME}-namespace --ignore-not-found
@@ -336,10 +342,8 @@ kubectl exec -n maestro deployment/maestro -- \
   curl -s -X DELETE http://localhost:8000/api/maestro/v1/resource-bundles/${RESOURCE_BUNDLE_ID}
 ```
 
-> **Note:** This is a workaround cleanup method. Once the HyperFleet API supports DELETE operations for clusters, this step should be replaced with:
-> ```bash
-> curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
-> ```
+**Expected Result:**
+- Cluster and all associated resources are cleaned up
 
 ---
 
@@ -425,16 +429,20 @@ kubectl exec -n maestro deployment/maestro -- \
 
 #### Step 4: Cleanup
 **Action:**
+- Delete the cluster via the API:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
+```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
 ```bash
 kubectl delete ns ${CLUSTER_ID}-${ADAPTER_NAME}-namespace --ignore-not-found
 kubectl exec -n maestro deployment/maestro -- \
   curl -s -X DELETE http://localhost:8000/api/maestro/v1/resource-bundles/${RESOURCE_BUNDLE_ID}
 ```
 
-> **Note:** This is a workaround cleanup method. Once the HyperFleet API supports DELETE operations for clusters, this step should be replaced with:
-> ```bash
-> curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
-> ```
+**Expected Result:**
+- Cluster and all associated resources are cleaned up
 
 ---
 
@@ -654,20 +662,20 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 #### Step 6: Cleanup Resources (AfterEach)
 
 **Action:**
-- Delete the namespace created for this cluster:
-```bash
-kubectl delete namespace {cluster_id}
-```
-- Restore Maestro to normal state (if not already restored)
-
-**Expected Result:**
-- Namespace and all associated resources are deleted successfully
-- Maestro is running normally
-
-**Note:** This is a workaround cleanup method. Once the HyperFleet API supports DELETE operations for clusters, this step should be replaced with:
+- Delete the cluster via the API:
 ```bash
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
+- Wait for hard-delete to complete (cluster returns 404)
+- Restore Maestro to normal state (if not already restored)
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
+```
+
+**Expected Result:**
+- Cluster and all associated resources are cleaned up
+- Maestro is running normally
 
 ---
 
@@ -860,10 +868,13 @@ kubectl rollout status deployment/hyperfleet-${ADAPTER_NAME} -n hyperfleet --tim
 echo "Adapter config restored successfully"
 ```
 
-> **Note:** Once the HyperFleet API supports DELETE operations for clusters, this step should be added with:
-> ```bash
-> curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
-> ```
+**Delete the cluster via the API:**
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
+```
+
+**Expected Result:**
+- Cluster and all associated resources are cleaned up
 
 ---
 
@@ -1091,7 +1102,12 @@ kubectl exec -n maestro deployment/maestro -- \
 #### Step 9: Cleanup
 **Action:**
 
-**Common cleanup steps:**
+- Delete the cluster via the API:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
+```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
 ```bash
 # Delete the resource bundle on Maestro (triggers agent to clean up K8s resources)
 kubectl exec -n maestro deployment/maestro -- \
@@ -1099,14 +1115,7 @@ kubectl exec -n maestro deployment/maestro -- \
 
 # Delete namespace as safety cleanup
 kubectl delete ns ${CLUSTER_ID}-${ADAPTER_NAME}-namespace --ignore-not-found
-
-# Wait for cleanup
-sleep 5
 ```
-> **Note:** Once the HyperFleet API supports DELETE operations for clusters, it can be replaced via this cleanup step:
-> ```bash
-> curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
-> ```
 
 **If using Option A (pre-configured adapter):**
 ```bash
@@ -1352,7 +1361,12 @@ kubectl get configmap ${CLUSTER_ID}-${ADAPTER_NAME}-configmap \
 #### Step 9: Cleanup
 **Action:**
 
-**Common cleanup steps:**
+- Delete the cluster via the API:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
+```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
 ```bash
 # Delete the resource bundle on Maestro (triggers agent to clean up K8s resources)
 kubectl exec -n maestro deployment/maestro -- \
@@ -1360,15 +1374,7 @@ kubectl exec -n maestro deployment/maestro -- \
 
 # Delete namespace as safety cleanup
 kubectl delete ns ${CLUSTER_ID}-${ADAPTER_NAME}-namespace --ignore-not-found
-
-# Wait for cleanup
-sleep 5
 ```
-
-> **Note:** Once the HyperFleet API supports DELETE operations for clusters, it can be replaced via this cleanup step:
-> ```bash
-> curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
-> ```
 
 **If using Option A (pre-configured adapter):**
 ```bash
@@ -1545,8 +1551,15 @@ curl -s ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}/statuses \
 - No status entry for this adapter (empty result)
 - This confirms that POST to /statuses failed as expected
 
-#### Step 9: Cleanup
+#### Step 7: Cleanup
 **Action:**
+
+- Delete the cluster via the API:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
+```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
 ```bash
 # Delete the resource bundle on Maestro
 kubectl exec -n maestro deployment/maestro -- \
@@ -1554,13 +1567,10 @@ kubectl exec -n maestro deployment/maestro -- \
 
 # Delete namespace
 kubectl delete ns ${CLUSTER_ID}-${ADAPTER_NAME}-namespace --ignore-not-found
+```
 
-> **Note:** Once the HyperFleet API supports DELETE operations for clusters, add this cleanup step:
-> ```bash
-> curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}
-> ```
-
-# Delete the test adapter deployment
+- Delete the test adapter deployment:
+```bash
 helm uninstall hyperfleet-${ADAPTER_NAME} -n hyperfleet
 
 # OR using make target supported in hyperfleet-infra

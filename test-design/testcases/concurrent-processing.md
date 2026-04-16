@@ -92,15 +92,18 @@ curl -s ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses | jq '.items
 
 #### Step 5: Cleanup resources
 **Action:**
-- For each cluster created in Step 1, delete the namespace:
+- For each cluster created in Step 1, delete the cluster via the API:
 ```bash
-kubectl delete namespace {cluster_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
+```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
 ```
 
 **Expected Result:**
-- All namespaces and associated resources are deleted successfully
-
-**Note:** This is a workaround cleanup method. Once CLM supports DELETE operations for "clusters" resource type, this step should be replaced with API DELETE calls.
+- All clusters and associated resources are cleaned up
 
 ---
 
@@ -189,17 +192,18 @@ kubectl get configmaps -n {cluster_id} -l hyperfleet.io/nodepool-id
 #### Step 5: Cleanup resources
 
 **Action:**
-- Delete nodepool-specific Kubernetes resources:
+- For each nodepool created in Step 1, delete the nodepool and then the cluster via the API:
 ```bash
-kubectl delete -n {cluster_id} <nodepool-resources>
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
+```
+- Wait for hard-delete to complete
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
 ```
 
 **Expected Result:**
-- All nodepool-specific resources are deleted successfully
-
-**Note:** This is a workaround cleanup method. Once CLM supports DELETE operations for "nodepools" resource type, this step should be replaced with:
-```bash
-curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
-```
+- Nodepools, cluster, and all associated resources are cleaned up
 
 ---

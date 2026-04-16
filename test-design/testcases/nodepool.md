@@ -5,6 +5,11 @@
 1. [Nodepools Resource Type - Workflow Validation](#test-title-nodepools-resource-type---workflow-validation)
 2. [Nodepools Resource Type - K8s Resource Check Aligned with Preinstalled NodePool Related Adapters Specified](#test-title-nodepools-resource-type---k8s-resource-check-aligned-with-preinstalled-nodepool-related-adapters-specified)
 
+### Related Test Cases
+
+- [Nodepool Deletion Lifecycle](delete-nodepool.md) -- soft-delete, hard-delete, sibling isolation, idempotent re-DELETE
+- [Nodepool Update Lifecycle](update-nodepool.md) -- PATCH triggers reconciliation, generation independence from parent cluster
+
 ---
 
 ## Test Title: Nodepools Resource Type - Workflow Validation
@@ -109,31 +114,19 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
 #### Step 4: Cleanup Resources (AfterEach)
 
 **Action:**
-- Wait for cluster Ready condition with timeout to prevent namespace deletion conflicts:
-  - Poll the cluster status via API until Ready=True
-  - If timeout occurs, log a warning and continue with best-effort cleanup
-- Delete the cluster namespace (cascades to delete nodepool resources):
+- Delete the nodepool and then the cluster via the API:
 ```bash
-# Wait for cluster Ready with timeout (best-effort, pseudo-code)
-# Poll: curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} until condition type=Ready, status=True
-# If timeout: log "WARN:  The cluster did not reach Ready state before cleanup"
-
-# Delete namespace regardless of Ready state
-kubectl delete namespace {cluster_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
+```
+- Wait for hard-delete to complete
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
 ```
 
 **Expected Result:**
-- Namespace deletion is attempted regardless of Ready state, with a warning logged if cluster is not Ready
-- Namespace and all associated resources (including nodepools) are deleted (best-effort)
-- Cleanup never hangs indefinitely
-
-**Note:** This is a workaround cleanup method. Once HyperFleet API supports DELETE operations for "nodepools" and "clusters" resource type, this step should be replaced with:
-```bash
-# Delete nodepool
-curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
-# Delete cluster
-curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
-```
+- Nodepool, cluster, and all associated resources are cleaned up
 
 ---
 
@@ -223,30 +216,18 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
 #### Step 3: Cleanup Resources (AfterEach)
 
 **Action:**
-- Wait for cluster Ready condition with timeout to prevent namespace deletion conflicts:
-  - Poll the cluster status via API until Ready=True
-  - If timeout occurs, log a warning and continue with best-effort cleanup
-- Delete the cluster namespace (cascades to delete nodepool resources):
+- Delete the nodepool and then the cluster via the API:
 ```bash
-# Wait for cluster Ready with timeout (best-effort, pseudo-code)
-# Poll: curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} until condition type=Ready, status=True
-# If timeout: log "WARN:  The cluster did not reach Ready state before cleanup"
-
-# Delete namespace regardless of Ready state
-kubectl delete namespace {cluster_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
+```
+- Wait for hard-delete to complete
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
 ```
 
 **Expected Result:**
-- Namespace deletion is attempted regardless of Ready state, with a warning logged if cluster is not Ready
-- Namespace and all associated resources (ConfigMap) are deleted (best-effort)
-- Cleanup never hangs indefinitely
-
-**Note:** This is a workaround cleanup method. Once HyperFleet API supports DELETE operations for "nodepools" and "clusters" resource type, this step should be replaced with:
-```bash
-# Delete nodepool
-curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
-# Delete cluster
-curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
-```
+- Nodepool, cluster, and all associated resources are cleaned up
 
 ---
