@@ -8,6 +8,11 @@
 4. [Cluster can reflect adapter failure in top-level status](#test-title-cluster-can-reflect-adapter-failure-in-top-level-status)
 5. [Cluster can reach correct status after adapter crash and recovery](#test-title-cluster-can-reach-correct-status-after-adapter-crash-and-recovery)
 
+### Related Test Cases
+
+- [Cluster Deletion Lifecycle](delete-cluster.md) -- soft-delete, hard-delete, cascade to nodepools, 409 on mutations
+- [Cluster Update Lifecycle](update-cluster.md) -- PATCH triggers reconciliation, adapter status transitions, rapid update coalescing
+
 ---
 
 ## Test Title: Clusters Resource Type - Basic Workflow Validation
@@ -113,18 +118,18 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 #### Step 5: Cleanup resources
 
 **Action:**
-- Delete the namespace created for this cluster:
-```bash
-kubectl delete namespace {cluster_id}
-```
-
-**Expected Result:**
-- Namespace and all associated resources are deleted successfully
-
-**Note:** This is a workaround cleanup method. Once CLM supports DELETE operations for "clusters" resource type, this step should be replaced with:
+- Delete the cluster via the API:
 ```bash
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
+```
+
+**Expected Result:**
+- Cluster and all associated resources are cleaned up
 
 ---
 
@@ -228,18 +233,18 @@ kubectl get deployment -n {cluster_id} -l hyperfleet.io/cluster-id={cluster_id},
 #### Step 4: Cleanup resources
 
 **Action:**
-- Delete the namespace created for this cluster:
-```bash
-kubectl delete namespace {cluster_id}
-```
-
-**Expected Result:**
-- Namespace and all associated resources are deleted successfully
-
-**Note:** This is a workaround cleanup method. Once CLM supports DELETE operations for "clusters" resource type, this step should be replaced with:
+- Delete the cluster via the API:
 ```bash
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
+```
+
+**Expected Result:**
+- Cluster and all associated resources are cleaned up
 
 ---
 
@@ -329,18 +334,18 @@ Throughout the entire period (from initial state until cl-deployment completes),
 #### Step 4: Cleanup resources
 
 **Action:**
-- Delete the namespace created for this cluster:
-```bash
-kubectl delete namespace {cluster_id}
-```
-
-**Expected Result:**
-- Namespace and all associated resources are deleted successfully
-
-**Note:** This is a workaround cleanup method. Once CLM supports DELETE operations for "clusters" resource type, this step should be replaced with:
+- Delete the cluster via the API:
 ```bash
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
+- Wait for hard-delete to complete (cluster returns 404)
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
+```
+
+**Expected Result:**
+- Cluster and all associated resources are cleaned up
 
 ---
 
@@ -434,25 +439,25 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 #### Step 5: Cleanup Resources (AfterEach)
 
 **Action:**
-- Delete the namespace created for this cluster:
+- Delete the cluster via the API:
 ```bash
-kubectl delete namespace {cluster_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
+- Wait for hard-delete to complete (cluster returns 404)
 - Uninstall the precondition-error-adapter Helm release
 - Clean up the Pub/Sub subscription created by the adapter (if using Google Pub/Sub broker):
 ```bash
 gcloud pubsub subscriptions delete {subscription_id} --project={project_id}
 ```
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
+```
 
 **Expected Result:**
-- Namespace and all associated resources are deleted successfully
+- Cluster and all associated resources are cleaned up
 - precondition-error-adapter deployment is removed
 - Pub/Sub subscription is deleted (if applicable)
-
-**Note:** This is a workaround cleanup method. Once CLM supports DELETE operations for "clusters" resource type, the namespace deletion should be replaced with:
-```bash
-curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
-```
 
 ---
 
@@ -557,24 +562,24 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 #### Step 5: Cleanup Resources (AfterEach)
 
 **Action:**
-- Delete the namespace created for this cluster:
+- Delete the cluster via the API:
 ```bash
-kubectl delete namespace {cluster_id}
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
+- Wait for hard-delete to complete (cluster returns 404)
 - Uninstall the crash-adapter Helm release
 - Clean up the Pub/Sub subscription created by the adapter (if using Google Pub/Sub broker):
 ```bash
 gcloud pubsub subscriptions delete {subscription_id} --project={project_id}
 ```
+- If cleanup fails, fall back to namespace deletion:
+```bash
+kubectl delete namespace {cluster_id} --ignore-not-found
+```
 
 **Expected Result:**
-- Namespace and all associated resources are deleted successfully
+- Cluster and all associated resources are cleaned up
 - crash-adapter deployment is removed
 - Pub/Sub subscription is deleted (if applicable)
-
-**Note:** This is a workaround cleanup method. Once CLM supports DELETE operations for "clusters" resource type, the namespace deletion should be replaced with:
-```bash
-curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
-```
 
 ---
