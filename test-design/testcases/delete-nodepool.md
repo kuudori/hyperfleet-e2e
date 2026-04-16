@@ -460,7 +460,7 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nod
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"updated-label": "should-not-work"}}'
+  -d '{"spec": {"updated-key": "should-not-work"}}'
 ```
 
 **Expected Result:**
@@ -476,7 +476,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
 ```
 
 **Expected Result:**
-- Nodepool spec does not contain the attempted label change
+- Nodepool spec does not contain the attempted change
 - `generation` remains at 2
 - `deleted_time` is still set (deletion not affected)
 

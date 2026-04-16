@@ -64,7 +64,7 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"updated-label": "new-value"}}'
+  -d '{"spec": {"updated-key": "new-value"}}'
 ```
 
 **Expected Result:**
@@ -182,7 +182,7 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"trigger-reconcile": "true"}}'
+  -d '{"spec": {"trigger-reconcile": "true"}}'
 ```
 - Immediately poll cluster status:
 ```bash
@@ -281,17 +281,17 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"update": "first"}}'
+  -d '{"spec": {"update": "first"}}'
 ```
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"update": "second"}}'
+  -d '{"spec": {"update": "second"}}'
 ```
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"update": "third"}}'
+  -d '{"spec": {"update": "third"}}'
 ```
 
 **Expected Result:**
@@ -322,7 +322,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 - Cluster `generation` equals 4
 - Cluster `Reconciled` condition `status: "True"` with `observed_generation: 4`
 - Cluster `Ready` condition `status: "True"`
-- Cluster labels contain `{"update": "third"}` (the last applied value)
+- Cluster spec contains `{"update": "third"}` (the last applied value)
 
 #### Step 5: Cleanup resources
 
@@ -401,7 +401,7 @@ For each case, submit the PATCH and capture the response:
 ```bash
 curl -i -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"k": "v"'
+  -d '{"spec": {"k": "v"'
 ```
 
 **Case B: Wrong type on a typed spec field**

@@ -65,7 +65,7 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"updated-label": "new-value"}}'
+  -d '{"spec": {"updated-key": "new-value"}}'
 ```
 
 **Expected Result:**

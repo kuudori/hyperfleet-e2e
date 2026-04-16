@@ -413,7 +413,7 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 
 This test validates that the API rejects mutation requests (PATCH) to clusters that have been soft-deleted. Once a cluster has `deleted_time` set, no spec modifications should be allowed to prevent new generation events from triggering reconciliation while deletion cleanup is in progress.
 
-**Note:** The PATCH request schema only accepts mutable fields (`spec`, `labels`), so `deleted_time` cannot be cleared via PATCH. However, a PATCH on a tombstoned resource bumps `generation`, creating a mismatch (`observed_generation < generation`) that blocks hard-delete until all adapters re-process and report at the new generation. The adapter's `lifecycle.delete.when` check short-circuits spec application (no K8s resources are recreated), but the unnecessary round-trip through Sentinel, adapter, and status reporting delays hard-delete completion. A 409 guard at the API boundary prevents this distributed churn entirely.
+**Note:** The PATCH request schema only accepts mutable fields (`spec`), so `deleted_time` cannot be cleared via PATCH. However, a PATCH on a tombstoned resource bumps `generation` (when spec changes), creating a mismatch (`observed_generation < generation`) that blocks hard-delete until all adapters re-process and report at the new generation. The adapter's `lifecycle.delete.when` check short-circuits spec application (no K8s resources are recreated), but the unnecessary round-trip through Sentinel, adapter, and status reporting delays hard-delete completion. A 409 guard at the API boundary prevents this distributed churn entirely.
 
 **Status note:** This test case requires the API to implement a mutation guard for tombstoned resources. Until then, PATCH will succeed on soft-deleted resources.
 
@@ -474,7 +474,7 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"updated-label": "should-not-work"}}'
+  -d '{"spec": {"updated-key": "should-not-work"}}'
 ```
 
 **Expected Result:**
@@ -490,7 +490,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
 
 **Expected Result:**
-- Cluster spec does not contain the attempted label change
+- Cluster spec does not contain the attempted change
 - `generation` remains at 2
 - `deleted_time` is still set (deletion not affected)
 
@@ -1151,7 +1151,7 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
 ```bash
 curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id} \
   -H "Content-Type: application/json" \
-  -d '{"labels": {"trigger-update": "true"}}'
+  -d '{"spec": {"trigger-update": "true"}}'
 ```
 
 **Expected Result:**
@@ -1278,11 +1278,11 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{first_cluster_id}
 #### Step 3: Create a new cluster with the same name
 
 **Action:**
-- Create a cluster using the same payload, but override the `name` field with `{cluster_name}` captured in Step 1:
+- Create a new cluster reusing `{cluster_name}` captured from Step 1's response:
 ```bash
 curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
   -H "Content-Type: application/json" \
-  -d @testdata/payloads/clusters/cluster-request.json  # override name to {cluster_name}
+  -d @testdata/payloads/clusters/cluster-request.json
 ```
 - Record the `id` as `{second_cluster_id}`
 
