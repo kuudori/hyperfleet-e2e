@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
+
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/logger"
 )
 
@@ -38,6 +40,14 @@ func (h *Helper) UpgradeAPIRequiredAdapters(ctx context.Context, apiChartPath, n
 	logger.Info("API required adapters updated successfully",
 		"cluster_adapters", adapterList,
 		"output", string(output))
+
+	logger.Info("waiting for API to be reachable after rollout")
+	Eventually(func() error {
+		_, err := h.Client.ListClusters(ctx)
+		return err
+	}, 2*time.Minute, 2*time.Second).Should(Succeed())
+	logger.Info("API is reachable after rollout")
+
 	return nil
 }
 
