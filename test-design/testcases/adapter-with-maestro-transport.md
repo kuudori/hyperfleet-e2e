@@ -814,8 +814,8 @@ curl -s ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}/statuses \
 - **Condition validation**:
   - `Applied: False` - ManifestWork was not created (consumer not registered)
   - `Available: False` - Resources not available (ManifestWork not applied)
-  - `Health: False` - Adapter execution failed at ResourceFailed phase
-    - Health reason: `ExecutionFailed:ResourceFailed`
+  - `Health: False` - Adapter execution failed at resources phase
+    - Health reason: `ExecutionFailed:resources`
     - Health message contains: "consumer \"xxxxxx\" is not registered in Maestro"
 
 
@@ -1079,7 +1079,7 @@ curl -s ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}/statuses \
   - `Available: False` - Resources not available (ManifestWork not found)
     - Reason: `NamespaceNotDiscovered`
   - `Health: False` - Adapter execution failed
-    - Reason: `ExecutionFailed:ResourceFailed`
+    - Reason: `ExecutionFailed:resources`
     - Message contains: "failed to discover resource after apply: manifestworks...not found"
 - **Data validation**:
   - `data.manifestwork.name` is empty (main discovery failed)

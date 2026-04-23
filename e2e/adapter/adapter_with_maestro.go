@@ -776,8 +776,8 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					g.Expect(healthCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
 						"Health should be False - discovery failed")
 					g.Expect(healthCondition.Reason).NotTo(BeNil())
-					g.Expect(*healthCondition.Reason).To(Equal("ExecutionFailed:ResourceFailed"),
-						"Health reason should be ExecutionFailed:ResourceFailed")
+					g.Expect(*healthCondition.Reason).To(Equal("ExecutionFailed:resources"),
+						"Health reason should be ExecutionFailed:resources")
 					g.Expect(healthCondition.Message).NotTo(BeNil())
 					g.Expect(*healthCondition.Message).To(ContainSubstring("not found"),
 						"Health message should mention ManifestWork not found")
