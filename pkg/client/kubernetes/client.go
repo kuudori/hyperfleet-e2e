@@ -112,7 +112,7 @@ func (c *Client) FetchNamespace(ctx context.Context, name string) (*corev1.Names
 	ns, err := c.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("namespace %s not found", name)
+			return nil, fmt.Errorf("namespace %s not found: %w", name, err)
 		}
 		return nil, fmt.Errorf("failed to get namespace %s: %w", name, err)
 	}
