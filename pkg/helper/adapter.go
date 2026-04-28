@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"math/big"
 	"os"
@@ -42,30 +43,23 @@ type AdapterDeploymentOptions struct {
 	SetValues   map[string]string // Additional Helm --set values
 }
 
-// GenerateAdapterReleaseName generates a unique Helm release name for an adapter deployment
-// The release name format is: adapter-<resource_type>-<adapter_name>-<random_suffix>
-// The random suffix prevents conflicts when multiple tests run concurrently or when cleanup from previous runs is incomplete
-// The name is truncated to 48 characters to leave room for Helm's deployment/pod suffixes (Kubernetes has a 63-char limit)
-// If truncation is needed, the random suffix is always preserved to maintain uniqueness
+// GenerateAdapterReleaseName generates a deterministic Helm release name for an adapter deployment.
+// The release name format is: adapter-<resource_type>-<adapter_name>
+// Deterministic naming allows helm upgrade --install to upgrade in place and avoids duplicate releases.
+// The name is truncated to 48 characters to leave room for Helm's deployment/pod suffixes (Kubernetes has a 63-char limit).
+// If truncation is needed, a deterministic hash is appended to prevent collisions between long names.
+const maxReleaseNameLength = 48
+
 func GenerateAdapterReleaseName(resourceType, adapterName string) string {
-	randomSuffix := generateRandomString(5)
 
-	// Kubernetes resource names have a 63-character limit
-	// Reserve ~15 characters for Helm's deployment/pod suffixes
-	maxReleaseNameLength := 48
+	releaseName := fmt.Sprintf("adapter-%s-%s", resourceType, adapterName)
 
-	// Build the base name without the suffix first
-	baseWithoutSuffix := fmt.Sprintf("adapter-%s-%s", resourceType, adapterName)
-
-	// Calculate how much space we have for the base (reserve space for "-" + suffix)
-	maxBaseLength := maxReleaseNameLength - len(randomSuffix) - 1
-
-	// Truncate the base if necessary, but always keep the suffix
-	if len(baseWithoutSuffix) > maxBaseLength {
-		baseWithoutSuffix = baseWithoutSuffix[:maxBaseLength]
+	if len(releaseName) > maxReleaseNameLength {
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(releaseName)))[:8]
+		truncLen := maxReleaseNameLength - len(hash) - 1
+		releaseName = releaseName[:truncLen] + "-" + hash
 	}
 
-	releaseName := fmt.Sprintf("%s-%s", baseWithoutSuffix, randomSuffix)
 	return releaseName
 }
 

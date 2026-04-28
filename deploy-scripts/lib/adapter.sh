@@ -107,27 +107,21 @@ install_adapter_instance() {
   log_info "Resource type: ${resource_type}"
   log_info "Adapter name: ${adapter_name}"
 
-  # Generate random suffix to prevent namespace conflicts
-  local random_suffix
-  random_suffix=$(head /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | head -c 8)
-
-  # Construct release name with random suffix
+  # Construct deterministic release name (matches API/Sentinel pattern)
   # Kubernetes resource names have a 63-character limit
   # Reserve ~15 characters for Helm's deployment/pod suffixes
   local max_release_name_length=48
-  local base_without_suffix="adapter-${resource_type}-${adapter_name}"
+  local release_name="adapter-${resource_type}-${adapter_name}"
 
-  # Calculate max base length (reserve space for "-" + suffix)
-  local max_base_length=$((max_release_name_length - ${#random_suffix} - 1))
-
-  # Truncate base if necessary, but always keep the suffix
-  if [[ ${#base_without_suffix} -gt ${max_base_length} ]]; then
-    base_without_suffix="${base_without_suffix:0:${max_base_length}}"
-    log_warning "Release name base truncated to ${max_base_length} chars to stay within Kubernetes limits"
+  if [[ ${#release_name} -gt ${max_release_name_length} ]]; then
+    local release_hash
+    release_hash=$(printf '%s' "${release_name}" | sha256sum | cut -c1-8)
+    local max_base_length=$((max_release_name_length - ${#release_hash} - 1))
+    release_name="${release_name:0:${max_base_length}}-${release_hash}"
+    log_warning "Release name truncated to ${max_release_name_length} chars to stay within Kubernetes limits"
   fi
 
-  local release_name="${base_without_suffix}-${random_suffix}"
-  log_info "Release name (with random suffix): ${release_name} (length: ${#release_name})"
+  log_info "Release name: ${release_name} (length: ${#release_name})"
 
   # Source adapter config directory (using ADAPTERS_FILE_DIR env var)
   local adapter_configs_dir="${ADAPTERS_FILE_DIR:-${TESTDATA_DIR}/adapter-configs}"
