@@ -52,7 +52,14 @@ func handleHTTPResponse[T any](resp *http.Response, expectedStatus int, action s
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != expectedStatus {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, &HTTPError{
+				StatusCode: resp.StatusCode,
+				Action:     action,
+				Body:       fmt.Sprintf("failed to read error response body: %v", err),
+			}
+		}
 		return nil, &HTTPError{
 			StatusCode: resp.StatusCode,
 			Action:     action,

@@ -130,14 +130,8 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
 					ginkgo.By("Verify final cluster state")
 					// Wait for cluster Ready condition and verify both Ready and Available conditions are True
 					// This confirms the cluster has reached the desired end state
-					err = h.WaitForClusterCondition(
-						ctx,
-						clusterID,
-						client.ConditionTypeReady,
-						openapi.ResourceConditionStatusTrue,
-						h.Cfg.Timeouts.Cluster.Ready,
-					)
-					Expect(err).NotTo(HaveOccurred(), "cluster Ready condition should transition to True")
+					Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Ready, h.Cfg.Polling.Interval).
+						Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
 
 					finalCluster, err := h.Client.GetCluster(ctx, clusterID)
 					Expect(err).NotTo(HaveOccurred(), "failed to get final cluster state")
@@ -238,14 +232,8 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
 					ginkgo.By("Verify final cluster state to ensure Ready before cleanup")
 					// Wait for cluster Ready condition to prevent namespace deletion conflicts
 					// Without this, adapters may still be creating resources during cleanup
-					err := h.WaitForClusterCondition(
-						ctx,
-						clusterID,
-						client.ConditionTypeReady,
-						openapi.ResourceConditionStatusTrue,
-						h.Cfg.Timeouts.Cluster.Ready,
-					)
-					Expect(err).NotTo(HaveOccurred(), "cluster Ready condition should transition to True before cleanup")
+					Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Ready, h.Cfg.Polling.Interval).
+						Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
 				})
 		})
 

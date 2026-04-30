@@ -87,14 +87,8 @@ var _ = ginkgo.Describe("[Suite: cluster][concurrent] System can process concurr
 				ginkgo.By("Wait for all clusters to reach Ready=True and Available=True")
 				for i, clusterID := range clusterIDs {
 					ginkgo.GinkgoWriter.Printf("Waiting for cluster %d (%s) to become Ready...\n", i, clusterID)
-					err := h.WaitForClusterCondition(
-						ctx,
-						clusterID,
-						client.ConditionTypeReady,
-						openapi.ResourceConditionStatusTrue,
-						h.Cfg.Timeouts.Cluster.Ready,
-					)
-					Expect(err).NotTo(HaveOccurred(), "cluster %d (%s) should reach Ready=True", i, clusterID)
+					Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Ready, h.Cfg.Polling.Interval).
+						Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
 
 					cluster, err := h.Client.GetCluster(ctx, clusterID)
 					Expect(err).NotTo(HaveOccurred(), "failed to get cluster %d (%s)", i, clusterID)

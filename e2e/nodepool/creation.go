@@ -147,15 +147,8 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 					ginkgo.By("Verify final nodepool state")
 					// Wait for nodepool Ready condition and verify both Ready and Available conditions are True
 					// This confirms the nodepool has reached the desired end state
-					err = h.WaitForNodePoolCondition(
-						ctx,
-						clusterID,
-						nodepoolID,
-						client.ConditionTypeReady,
-						openapi.ResourceConditionStatusTrue,
-						h.Cfg.Timeouts.NodePool.Ready,
-					)
-					Expect(err).NotTo(HaveOccurred(), "nodepool Ready condition should transition to True")
+					Eventually(h.PollNodePool(ctx, clusterID, nodepoolID), h.Cfg.Timeouts.NodePool.Ready, h.Cfg.Polling.Interval).
+						Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
 
 					finalNodePool, err := h.Client.GetNodePool(ctx, clusterID, nodepoolID)
 					Expect(err).NotTo(HaveOccurred(), "failed to get final nodepool state")
@@ -239,15 +232,8 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 					// Wait for nodepool Ready condition and verify both Ready and Available conditions are True
 					// This confirms the nodepool workflow completed successfully and all K8s resources were created
 					// Without this, adapters may still be creating resources during cleanup
-					err := h.WaitForNodePoolCondition(
-						ctx,
-						clusterID,
-						nodepoolID,
-						client.ConditionTypeReady,
-						openapi.ResourceConditionStatusTrue,
-						h.Cfg.Timeouts.NodePool.Ready,
-					)
-					Expect(err).NotTo(HaveOccurred(), "nodepool Ready condition should transition to True")
+					Eventually(h.PollNodePool(ctx, clusterID, nodepoolID), h.Cfg.Timeouts.NodePool.Ready, h.Cfg.Polling.Interval).
+						Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
 				})
 		})
 
@@ -262,19 +248,11 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 			// Wait for cluster Ready condition to prevent namespace deletion conflicts
 			// Without this, adapters may still be creating resources during cleanup
 			// TODO Replace this workaround with clusters and nodepools API DELETE once HyperFleet API supports
-			err := h.WaitForClusterCondition(
-				ctx,
-				clusterID,
-				client.ConditionTypeReady,
-				openapi.ResourceConditionStatusTrue,
-				h.Cfg.Timeouts.Cluster.Ready,
-			)
-			if err != nil {
-				ginkgo.GinkgoWriter.Printf("WARNING: cluster %s did not reach Ready state before cleanup: %v\n", clusterID, err)
-			}
+			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Ready, h.Cfg.Polling.Interval).
+				Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
 
 			ginkgo.By("cleaning up test cluster " + clusterID)
-			err = h.CleanupTestCluster(ctx, clusterID)
+			err := h.CleanupTestCluster(ctx, clusterID)
 			Expect(err).NotTo(HaveOccurred(), "failed to cleanup cluster %s", clusterID)
 		})
 	},

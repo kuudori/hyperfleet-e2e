@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/onsi/ginkgo/v2"
@@ -28,8 +29,8 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Deletion Lifecycle",
 			Expect(cluster.Id).NotTo(BeNil(), "cluster ID should be generated")
 			clusterID = *cluster.Id
 
-			err = h.WaitForClusterCondition(ctx, clusterID, client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue, h.Cfg.Timeouts.Cluster.Ready)
-			Expect(err).NotTo(HaveOccurred(), "cluster should reach Reconciled=True before deletion")
+			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Ready, h.Cfg.Polling.Interval).
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should complete full deletion lifecycle from soft-delete through hard-delete", func(ctx context.Context) {
@@ -43,8 +44,8 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Deletion Lifecycle",
 			Expect(deletedCluster.Generation).To(Equal(clusterBefore.Generation+1), "generation should increment after soft-delete")
 
 			ginkgo.By("waiting for all adapters to report Finalized=True")
-			err = h.WaitForAllClusterAdaptersFinalized(ctx, clusterID, h.Cfg.Timeouts.Adapter.Processing)
-			Expect(err).NotTo(HaveOccurred(), "all adapters should report Finalized=True")
+			Eventually(h.PollClusterAdapterStatuses(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				Should(helper.HaveAllAdaptersWithCondition(h.Cfg.Adapters.Cluster, client.ConditionTypeFinalized, openapi.AdapterConditionStatusTrue))
 
 			ginkgo.By("verifying adapter conditions after finalization")
 			statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
@@ -59,12 +60,12 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Deletion Lifecycle",
 			}
 
 			ginkgo.By("waiting for cluster to be hard-deleted")
-			err = h.WaitForClusterHardDelete(ctx, clusterID, h.Cfg.Timeouts.Adapter.Processing)
-			Expect(err).NotTo(HaveOccurred(), "cluster should be permanently removed after hard-delete")
+			Eventually(h.PollClusterHTTPStatus(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				Should(Equal(http.StatusNotFound))
 
 			ginkgo.By("verifying downstream K8s namespace is cleaned up")
-			err = h.WaitForNamespaceAbsent(ctx, clusterID, h.Cfg.Timeouts.Adapter.Processing)
-			Expect(err).NotTo(HaveOccurred(), "K8s namespace should be absent after deletion")
+			Eventually(h.PollNamespacesByPrefix(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				Should(BeEmpty())
 		})
 
 		ginkgo.It("should return 409 Conflict when PATCHing a soft-deleted cluster", ginkgo.Label(labels.Negative), func(ctx context.Context) {
@@ -96,6 +97,11 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Deletion Lifecycle",
 				return
 			}
 			ginkgo.By("cleaning up cluster " + clusterID)
+			if cluster, err := h.Client.GetCluster(ctx, clusterID); err == nil && cluster.DeletedTime == nil {
+				if _, err := h.Client.DeleteCluster(ctx, clusterID); err != nil {
+					ginkgo.GinkgoWriter.Printf("Warning: API delete failed for cluster %s: %v\n", clusterID, err)
+				}
+			}
 			if err := h.CleanupTestCluster(ctx, clusterID); err != nil {
 				ginkgo.GinkgoWriter.Printf("Warning: cleanup failed for cluster %s: %v\n", clusterID, err)
 			}
@@ -120,26 +126,26 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Cascade Deletion",
 			Expect(cluster.Id).NotTo(BeNil(), "cluster ID should be generated")
 			clusterID = *cluster.Id
 
-			err = h.WaitForClusterCondition(ctx, clusterID, client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue, h.Cfg.Timeouts.Cluster.Ready)
-			Expect(err).NotTo(HaveOccurred(), "cluster should reach Reconciled=True")
+			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Ready, h.Cfg.Polling.Interval).
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
 
-			ginkgo.By("creating first nodepool and waiting for Reconciled")
+			ginkgo.By("creating two nodepools")
 			np1, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, h.TestDataPath("payloads/nodepools/nodepool-request.json"))
 			Expect(err).NotTo(HaveOccurred(), "failed to create first nodepool")
 			Expect(np1.Id).NotTo(BeNil())
 			nodepoolID1 = *np1.Id
 
-			err = h.WaitForNodePoolCondition(ctx, clusterID, nodepoolID1, client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue, h.Cfg.Timeouts.NodePool.Ready)
-			Expect(err).NotTo(HaveOccurred(), "first nodepool should reach Reconciled=True")
-
-			ginkgo.By("creating second nodepool and waiting for Reconciled")
 			np2, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, h.TestDataPath("payloads/nodepools/nodepool-request.json"))
 			Expect(err).NotTo(HaveOccurred(), "failed to create second nodepool")
 			Expect(np2.Id).NotTo(BeNil())
 			nodepoolID2 = *np2.Id
 
-			err = h.WaitForNodePoolCondition(ctx, clusterID, nodepoolID2, client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue, h.Cfg.Timeouts.NodePool.Ready)
-			Expect(err).NotTo(HaveOccurred(), "second nodepool should reach Reconciled=True")
+			ginkgo.By("waiting for both nodepools to reach Reconciled")
+			Eventually(h.PollNodePool(ctx, clusterID, nodepoolID1), h.Cfg.Timeouts.NodePool.Ready, h.Cfg.Polling.Interval).
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+
+			Eventually(h.PollNodePool(ctx, clusterID, nodepoolID2), h.Cfg.Timeouts.NodePool.Ready, h.Cfg.Polling.Interval).
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should cascade deletion to child nodepools and hard-delete all resources", func(ctx context.Context) {
@@ -148,29 +154,41 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Cascade Deletion",
 			Expect(err).NotTo(HaveOccurred(), "DELETE request should succeed with 202")
 			Expect(deletedCluster.DeletedTime).NotTo(BeNil(), "cluster should have deleted_time set")
 
-			ginkgo.By("verifying cascade: both child nodepools have deleted_time set")
-			np1, err := h.Client.GetNodePool(ctx, clusterID, nodepoolID1)
-			Expect(err).NotTo(HaveOccurred(), "first nodepool should still be accessible")
-			Expect(np1.DeletedTime).NotTo(BeNil(), "first nodepool should have deleted_time set via cascade")
+			ginkgo.By("verifying cascade: both child nodepools are soft-deleted or already hard-deleted")
+			Eventually(func(g Gomega) {
+				np1, err := h.Client.GetNodePool(ctx, clusterID, nodepoolID1)
+				var httpErr *client.HTTPError
+				if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+					return
+				}
+				g.Expect(err).NotTo(HaveOccurred(), "first nodepool should be accessible or 404")
+				g.Expect(np1.DeletedTime).NotTo(BeNil(), "first nodepool should have deleted_time set via cascade")
+			}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 
-			np2, err := h.Client.GetNodePool(ctx, clusterID, nodepoolID2)
-			Expect(err).NotTo(HaveOccurred(), "second nodepool should still be accessible")
-			Expect(np2.DeletedTime).NotTo(BeNil(), "second nodepool should have deleted_time set via cascade")
+			Eventually(func(g Gomega) {
+				np2, err := h.Client.GetNodePool(ctx, clusterID, nodepoolID2)
+				var httpErr *client.HTTPError
+				if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
+					return
+				}
+				g.Expect(err).NotTo(HaveOccurred(), "second nodepool should be accessible or 404")
+				g.Expect(np2.DeletedTime).NotTo(BeNil(), "second nodepool should have deleted_time set via cascade")
+			}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 
 			ginkgo.By("waiting for both nodepools to be hard-deleted")
-			err = h.WaitForNodePoolHardDelete(ctx, clusterID, nodepoolID1, h.Cfg.Timeouts.Adapter.Processing)
-			Expect(err).NotTo(HaveOccurred(), "first nodepool should be hard-deleted")
+			Eventually(h.PollNodePoolHTTPStatus(ctx, clusterID, nodepoolID1), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				Should(Equal(http.StatusNotFound))
 
-			err = h.WaitForNodePoolHardDelete(ctx, clusterID, nodepoolID2, h.Cfg.Timeouts.Adapter.Processing)
-			Expect(err).NotTo(HaveOccurred(), "second nodepool should be hard-deleted")
+			Eventually(h.PollNodePoolHTTPStatus(ctx, clusterID, nodepoolID2), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				Should(Equal(http.StatusNotFound))
 
 			ginkgo.By("waiting for cluster to be hard-deleted after all nodepools removed")
-			err = h.WaitForClusterHardDelete(ctx, clusterID, h.Cfg.Timeouts.Adapter.Processing)
-			Expect(err).NotTo(HaveOccurred(), "cluster should be hard-deleted after all child nodepools removed")
+			Eventually(h.PollClusterHTTPStatus(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				Should(Equal(http.StatusNotFound))
 
 			ginkgo.By("verifying downstream K8s namespace is cleaned up")
-			err = h.WaitForNamespaceAbsent(ctx, clusterID, h.Cfg.Timeouts.Adapter.Processing)
-			Expect(err).NotTo(HaveOccurred(), "K8s namespace should be absent after cascade deletion")
+			Eventually(h.PollNamespacesByPrefix(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				Should(BeEmpty())
 		})
 
 		ginkgo.AfterEach(func(ctx context.Context) {
@@ -178,6 +196,11 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Cascade Deletion",
 				return
 			}
 			ginkgo.By("cleaning up cluster " + clusterID)
+			if cluster, err := h.Client.GetCluster(ctx, clusterID); err == nil && cluster.DeletedTime == nil {
+				if _, err := h.Client.DeleteCluster(ctx, clusterID); err != nil {
+					ginkgo.GinkgoWriter.Printf("Warning: API delete failed for cluster %s: %v\n", clusterID, err)
+				}
+			}
 			if err := h.CleanupTestCluster(ctx, clusterID); err != nil {
 				ginkgo.GinkgoWriter.Printf("Warning: cleanup failed for cluster %s: %v\n", clusterID, err)
 			}

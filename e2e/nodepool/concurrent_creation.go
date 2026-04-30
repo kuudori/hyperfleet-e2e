@@ -104,15 +104,8 @@ var _ = ginkgo.Describe("[Suite: nodepool][concurrent] Multiple nodepools can co
 				ginkgo.By("Wait for all nodepools to reach Ready=True and Available=True")
 				for i, npID := range nodepoolIDs {
 					ginkgo.GinkgoWriter.Printf("Waiting for nodepool %d (%s) to become Ready...\n", i, npID)
-					err := h.WaitForNodePoolCondition(
-						ctx,
-						clusterID,
-						npID,
-						client.ConditionTypeReady,
-						openapi.ResourceConditionStatusTrue,
-						h.Cfg.Timeouts.NodePool.Ready,
-					)
-					Expect(err).NotTo(HaveOccurred(), "nodepool %d (%s) should reach Ready=True", i, npID)
+					Eventually(h.PollNodePool(ctx, clusterID, npID), h.Cfg.Timeouts.NodePool.Ready, h.Cfg.Polling.Interval).
+						Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
 
 					np, err := h.Client.GetNodePool(ctx, clusterID, npID)
 					Expect(err).NotTo(HaveOccurred(), "failed to get nodepool %d (%s)", i, npID)
@@ -181,20 +174,15 @@ var _ = ginkgo.Describe("[Suite: nodepool][concurrent] Multiple nodepools can co
 				return
 			}
 
-			ginkgo.By("Verify final cluster state to ensure Ready before cleanup")
-			err := h.WaitForClusterCondition(
-				ctx,
-				clusterID,
-				client.ConditionTypeReady,
-				openapi.ResourceConditionStatusTrue,
-				h.Cfg.Timeouts.Cluster.Ready,
-			)
-			if err != nil {
-				ginkgo.GinkgoWriter.Printf("WARNING: cluster %s did not reach Ready state before cleanup: %v\n", clusterID, err)
+			if err := InterceptGomegaFailure(func() {
+				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Ready, h.Cfg.Polling.Interval).
+					Should(helper.HaveResourceCondition(client.ConditionTypeReady, openapi.ResourceConditionStatusTrue))
+			}); err != nil {
+				ginkgo.GinkgoWriter.Printf("Warning: cluster %s not in Ready state before cleanup: %v\n", clusterID, err)
 			}
 
 			ginkgo.By("cleaning up test cluster " + clusterID)
-			err = h.CleanupTestCluster(ctx, clusterID)
+			err := h.CleanupTestCluster(ctx, clusterID)
 			Expect(err).NotTo(HaveOccurred(), "failed to cleanup cluster %s", clusterID)
 		})
 	},
