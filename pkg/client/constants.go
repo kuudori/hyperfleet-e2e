@@ -13,9 +13,11 @@ const (
 	ConditionTypeApplied   = "Applied"   // Resources created successfully
 	ConditionTypeAvailable = "Available" // Work completed successfully
 	ConditionTypeHealth    = "Health"    // No unexpected errors
+	ConditionTypeFinalized = "Finalized" // Cleanup confirmed during deletion
 )
 
 // Condition types used by cluster-level resources (clusters, nodepools)
 const (
-	ConditionTypeReady = "Ready" // Resource is ready for use
+	ConditionTypeReady      = "Ready"      // Resource is ready for use
+	ConditionTypeReconciled = "Reconciled" // Resource has been reconciled by adapters
 )

@@ -32,19 +32,32 @@ func NewHyperFleetClient(baseURL string, httpClient *http.Client) (*HyperFleetCl
 	}, nil
 }
 
+// HTTPError represents an unexpected HTTP status code from the API.
+type HTTPError struct {
+	StatusCode int
+	Action     string
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	if e.Body != "" {
+		return fmt.Sprintf("unexpected status code %d for %s: %s", e.StatusCode, e.Action, e.Body)
+	}
+	return fmt.Sprintf("unexpected status code %d for %s", e.StatusCode, e.Action)
+}
+
 // handleHTTPResponse is a generic helper for processing HTTP responses.
 // It handles status code validation, response body decoding, and error formatting.
 func handleHTTPResponse[T any](resp *http.Response, expectedStatus int, action string) (*T, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != expectedStatus {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("unexpected status code %d for %s (failed to read response body: %w)",
-				resp.StatusCode, action, err)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &HTTPError{
+			StatusCode: resp.StatusCode,
+			Action:     action,
+			Body:       string(body),
 		}
-		return nil, fmt.Errorf("unexpected status code %d for %s: %s",
-			resp.StatusCode, action, string(body))
 	}
 
 	var result T
