@@ -7,8 +7,11 @@
 3. [Re-DELETE on already-deleted nodepool is idempotent](#test-title-re-delete-on-already-deleted-nodepool-is-idempotent)
 4. [DELETE non-existent nodepool returns 404](#test-title-delete-non-existent-nodepool-returns-404)
 5. [PATCH to soft-deleted nodepool returns 409 Conflict](#test-title-patch-to-soft-deleted-nodepool-returns-409-conflict)
+6. [Soft-deleted nodepool remains visible via GET and LIST](#test-title-soft-deleted-nodepool-remains-visible-via-get-and-list)
 
 ---
+
+> **Hard-delete mechanism:** Hard-delete executes inline within the `POST /adapter_statuses` request that computes `Reconciled=True`. No separate endpoint or background process — test steps simply poll until GET returns 404. See [hard-delete-design.md](https://github.com/openshift-hyperfleet/architecture/blob/main/hyperfleet/components/api-service/hard-delete-design.md).
 
 ## Test Title: Nodepool deletion happy path -- soft-delete through hard-delete
 
@@ -35,14 +38,12 @@ This test validates the complete nodepool deletion lifecycle. It verifies that w
 1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
 2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
 3. The adapters defined in testdata/adapter-configs are all deployed successfully
-4. DELETE and hard-delete endpoints are deployed and operational
-5. Reconciled status aggregation is implemented
 
 ---
 
 ### Test Steps
 
-#### Step 1: Create a cluster and a nodepool, wait for Ready state
+#### Step 1: Create a cluster and a nodepool, wait for Reconciled state
 
 **Action:**
 - Create a cluster:
@@ -57,11 +58,11 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
   -H "Content-Type: application/json" \
   -d @testdata/payloads/nodepools/nodepool-request.json
 ```
-- Wait for both cluster and nodepool to reach Ready state
+- Wait for both cluster and nodepool to reach Reconciled state
 
 **Expected Result:**
-- Cluster `Ready` condition `status: "True"`
-- Nodepool `Ready` condition `status: "True"`
+- Cluster `Reconciled` condition `status: "True"`
+- Nodepool `Reconciled` condition `status: "True"`
 
 #### Step 2: Send DELETE request for the nodepool only
 
@@ -93,7 +94,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
 #### Step 4: Verify nodepool reaches Reconciled=True and is hard-deleted
 
 **Action:**
-- Poll nodepool status, then attempt GET after hard-delete:
+- Poll nodepool status until hard-delete completes (executes automatically when `Reconciled=True`):
 ```bash
 curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
 ```
@@ -112,7 +113,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 
 **Expected Result:**
 - Cluster does NOT have `deleted_time` set
-- Cluster `Ready` condition remains `status: "True"`
+- Cluster `Reconciled` condition remains `status: "True"`
 - Cluster `Available` condition remains `status: "True"`
 - Cluster is fully operational and unaffected by the nodepool deletion
 
@@ -154,13 +155,12 @@ This test validates isolation between sibling nodepools during deletion. When on
 1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
 2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
 3. The adapters defined in testdata/adapter-configs are all deployed successfully
-4. DELETE endpoint is deployed and operational
 
 ---
 
 ### Test Steps
 
-#### Step 1: Create a cluster with two nodepools and wait for Ready state
+#### Step 1: Create a cluster with two nodepools and wait for Reconciled state
 
 **Action:**
 - Create a cluster and two nodepools (each call generates a unique name via `{{.Random}}` template):
@@ -179,10 +179,10 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
   -H "Content-Type: application/json" \
   -d @testdata/payloads/nodepools/nodepool-request.json
 ```
-- Wait for all to reach Ready state
+- Wait for all to reach Reconciled state
 
 **Expected Result:**
-- Cluster and both nodepools reach `Ready` condition `status: "True"`
+- Cluster and both nodepools reach `Reconciled` condition `status: "True"`
 
 #### Step 2: Delete one nodepool
 
@@ -208,7 +208,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
 
 **Expected Result:**
 - Sibling nodepool does NOT have `deleted_time` set
-- Sibling nodepool `Ready` condition remains `status: "True"`
+- Sibling nodepool `Reconciled` condition remains `status: "True"`
 - Sibling nodepool adapter statuses are unchanged (`Applied: True`, `Available: True`, `Health: True`)
 
 #### Step 4: Verify parent cluster is unaffected
@@ -220,7 +220,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 
 **Expected Result:**
 - Cluster does NOT have `deleted_time` set
-- Cluster `Ready` condition remains `status: "True"`
+- Cluster `Reconciled` condition remains `status: "True"`
 
 #### Step 5: Cleanup resources
 
@@ -260,16 +260,15 @@ This test validates that calling DELETE on a nodepool that has already been soft
 1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
 2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
 3. The adapters defined in testdata/adapter-configs are all deployed successfully
-4. DELETE endpoint is deployed and operational
 
 ---
 
 ### Test Steps
 
-#### Step 1: Create a cluster and nodepool, wait for Ready state
+#### Step 1: Create a cluster and nodepool, wait for Reconciled state
 
 **Action:**
-- Create a cluster and nodepool, wait for Ready:
+- Create a cluster and nodepool, wait for Reconciled:
 ```bash
 curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
   -H "Content-Type: application/json" \
@@ -282,7 +281,7 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
 ```
 
 **Expected Result:**
-- Cluster and nodepool reach Ready state
+- Cluster and nodepool reach `Reconciled: True`
 
 #### Step 2: Send first DELETE request
 
@@ -392,21 +391,19 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 
 This test validates that the API rejects mutation requests (PATCH) to nodepools that have been soft-deleted. Once a nodepool has `deleted_time` set, no spec modifications should be allowed to prevent new generation events from triggering reconciliation while deletion cleanup is in progress.
 
-**Note:** Same mechanism as the cluster PATCH 409 test case — a PATCH on a tombstoned nodepool bumps `generation`, creating a mismatch that blocks hard-delete until adapters re-process at the new generation. The adapter won't recreate K8s resources (deletion check short-circuits apply), but the round-trip through Sentinel and adapter delays hard-delete. A 409 guard prevents this.
-
-**Status note:** This test case requires the API to implement a mutation guard for tombstoned resources. Until then, PATCH will succeed on soft-deleted nodepools.
+**Note:** Same mechanism as the cluster PATCH 409 test case — a PATCH on a soft-deleted nodepool bumps `generation`, creating a mismatch that blocks hard-delete until adapters re-process at the new generation. The adapter won't recreate K8s resources (deletion check short-circuits apply), but the round-trip through Sentinel and adapter delays hard-delete. A 409 guard prevents this.
 
 ---
 
 | **Field** | **Value** |
 |-----------|-----------|
 | **Pos/Neg** | Negative |
-| **Priority** | Tier0 |
+| **Priority** | Tier1 |
 | **Status** | Draft |
 | **Automation** | Not Automated |
 | **Version** | Post-MVP |
 | **Created** | 2026-04-15 |
-| **Updated** | 2026-04-16 |
+| **Updated** | 2026-04-28 |
 
 ---
 
@@ -415,14 +412,12 @@ This test validates that the API rejects mutation requests (PATCH) to nodepools 
 1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
 2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
 3. The adapters defined in testdata/adapter-configs are all deployed successfully
-4. DELETE and PATCH endpoints are deployed and operational
-5. Mutation guard for tombstoned resources is implemented in the API
 
 ---
 
 ### Test Steps
 
-#### Step 1: Create a cluster and nodepool, wait for Ready state
+#### Step 1: Create a cluster and nodepool, wait for Reconciled state
 
 **Action:**
 - Create a cluster and nodepool:
@@ -436,10 +431,10 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
   -H "Content-Type: application/json" \
   -d @testdata/payloads/nodepools/nodepool-request.json
 ```
-- Wait for both to reach Ready state
+- Wait for both to reach Reconciled state
 
 **Expected Result:**
-- Cluster and nodepool reach `Ready` condition `status: "True"`
+- Cluster and nodepool reach `Reconciled` condition `status: "True"`
 - Nodepool at `generation: 1`
 
 #### Step 2: Send DELETE request to soft-delete the nodepool
@@ -490,5 +485,138 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 
 **Expected Result:**
 - Cluster and all associated resources are cleaned up
+
+---
+
+## Test Title: Soft-deleted nodepool remains visible via GET and LIST
+
+### Description
+
+This test validates that after a nodepool is soft-deleted, it remains queryable via GET and LIST before hard-delete. The test uses a Sentinel fence (scale `sentinel-nodepools` to 0) immediately after DELETE so the visibility window is deterministic and not dependent on reconciliation timing races.
+
+---
+
+| **Field** | **Value** |
+|-----------|-----------|
+| **Pos/Neg** | Positive |
+| **Priority** | Tier1 |
+| **Status** | Draft |
+| **Automation** | Not Automated |
+| **Version** | Post-MVP |
+| **Created** | 2026-04-17 |
+| **Updated** | 2026-04-28 |
+
+---
+
+### Preconditions
+
+1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
+2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
+3. The adapters defined in testdata/adapter-configs are all deployed successfully
+
+---
+
+### Test Steps
+
+#### Step 1: Create a cluster with two nodepools and wait for Reconciled state
+
+**Action:**
+- Create a cluster and two nodepools:
+```bash
+curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
+  -H "Content-Type: application/json" \
+  -d @testdata/payloads/clusters/cluster-request.json
+```
+```bash
+curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
+  -H "Content-Type: application/json" \
+  -d @testdata/payloads/nodepools/nodepool-request.json
+```
+```bash
+curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
+  -H "Content-Type: application/json" \
+  -d @testdata/payloads/nodepools/nodepool-request.json
+```
+- Wait for all to reach Reconciled state
+- Record IDs as `{active_nodepool_id}` and `{deleted_nodepool_id}`
+
+**Expected Result:**
+- Cluster and both nodepools reach `Reconciled: True`
+
+#### Step 2: Soft-delete one nodepool
+
+**Action:**
+- Soft-delete one nodepool:
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{deleted_nodepool_id}
+```
+- Scale Sentinel for nodepools to 0 replicas to freeze reconciliation while visibility assertions run:
+```bash
+kubectl scale deployment/sentinel-nodepools -n hyperfleet --replicas=0
+kubectl rollout status deployment/sentinel-nodepools -n hyperfleet --timeout=60s
+```
+
+**Expected Result:**
+- Response returns HTTP 202 (Accepted) with `deleted_time` set
+- `generation` on `{deleted_nodepool_id}` is incremented to the post-delete generation
+- Sentinel nodepool reconciler is paused, preventing hard-delete progression during visibility checks
+
+#### Step 3: Verify GET observes the soft-deleted nodepool before hard-delete
+
+**Action:**
+- Poll GET with `Eventually` until the soft-deleted nodepool is observed via HTTP 200 with `deleted_time` populated. While the Sentinel fence is active, HTTP 404 in this step is a failure (it means visibility was not proven). Use framework-configured polling/timeout values (for example, `500ms` interval and `10s` timeout):
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{deleted_nodepool_id}
+```
+
+**Expected Result:**
+- At least one GET returns HTTP 200 (OK) with the nodepool object present and `deleted_time` populated
+- This proves the nodepool remains visible in soft-deleted state while reconciliation is paused
+- HTTP 404 is not an acceptable success outcome for this visibility step
+
+**Note:** During this observation period, `Reconciled` is frequently `False` while adapters finalize the post-delete generation, but it can transition quickly depending on system timing.
+
+#### Step 4: Verify LIST includes both active and soft-deleted nodepools before hard-delete completes
+
+**Action:**
+- Poll LIST with `Eventually` until both the active and deleted nodepools are present simultaneously. Use framework-configured polling/timeout values (for example, `500ms` interval and `10s` timeout):
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools
+```
+
+**Expected Result:**
+- At least one LIST returns both `{active_nodepool_id}` and `{deleted_nodepool_id}`
+- `{active_nodepool_id}` has `deleted_time` as null/absent
+- `{deleted_nodepool_id}` has `deleted_time` set to a valid RFC3339 timestamp
+- Both nodepools have their full resource representation (conditions, spec, labels)
+
+#### Step 5: Verify active nodepool is unaffected
+
+**Action:**
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{active_nodepool_id}
+```
+
+**Expected Result:**
+- Active nodepool: HTTP 200, no `deleted_time`, `Reconciled: True`
+- Active nodepool adapter statuses are unchanged
+
+#### Step 6: Cleanup resources
+
+**Action:**
+- Scale Sentinel for nodepools back to 1 replica to resume reconciliation:
+```bash
+kubectl scale deployment/sentinel-nodepools -n hyperfleet --replicas=1
+kubectl rollout status deployment/sentinel-nodepools -n hyperfleet --timeout=60s
+```
+- Delete the cluster (cascades to remaining nodepool):
+```bash
+curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
+```
+- If the deleted nodepool or parent cluster still exists after the assertions, poll until GET returns HTTP 404 (hard-delete executes automatically when `Reconciled=True`)
+- The framework cleanup helpers can handle any remaining lifecycle in `AfterEach`
+
+**Expected Result:**
+- Cluster and all nodepools are eventually hard-deleted (GET returns HTTP 404)
 
 ---

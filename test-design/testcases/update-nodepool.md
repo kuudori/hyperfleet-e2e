@@ -3,7 +3,7 @@
 ## Table of Contents
 
 1. [Nodepool update via PATCH triggers reconciliation and reaches Reconciled](#test-title-nodepool-update-via-patch-triggers-reconciliation-and-reaches-reconciled)
-2. [PATCH with invalid payload is rejected without changing nodepool state](#test-title-patch-with-invalid-payload-is-rejected-without-changing-nodepool-state)
+2. [Labels-only PATCH bumps generation and triggers reconciliation](#test-title-labels-only-patch-bumps-generation-and-triggers-reconciliation)
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### Description
 
-This test validates the nodepool update lifecycle. It verifies that when a PATCH request modifies a nodepool's spec, the nodepool's `generation` is incremented independently of the parent cluster, nodepool adapters reconcile to the new generation, and the nodepool reaches `Reconciled=True`. The parent cluster must remain unaffected.
+This test validates the nodepool update lifecycle. It verifies that when a PATCH request modifies a nodepool's spec, the nodepool's `generation` is incremented independently of the parent cluster, nodepool adapters reconcile to the new generation, and the nodepool reaches `Reconciled=True` and `Available=True`. The parent cluster must remain unaffected.
 
 ---
 
@@ -23,7 +23,7 @@ This test validates the nodepool update lifecycle. It verifies that when a PATCH
 | **Automation** | Not Automated |
 | **Version** | Post-MVP |
 | **Created** | 2026-04-15 |
-| **Updated** | 2026-04-15 |
+| **Updated** | 2026-04-28 |
 
 ---
 
@@ -32,14 +32,12 @@ This test validates the nodepool update lifecycle. It verifies that when a PATCH
 1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
 2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
 3. The adapters defined in testdata/adapter-configs are all deployed successfully
-4. PATCH endpoint is deployed and operational
-5. Reconciled status aggregation is implemented
 
 ---
 
 ### Test Steps
 
-#### Step 1: Create a cluster and nodepool, wait for Ready state
+#### Step 1: Create a cluster and nodepool, wait for Reconciled and Available state
 
 **Action:**
 - Create a cluster and nodepool:
@@ -53,11 +51,14 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
   -H "Content-Type: application/json" \
   -d @testdata/payloads/nodepools/nodepool-request.json
 ```
-- Wait for both to reach Ready state
+- Wait for both to reach Reconciled state
 
 **Expected Result:**
-- Cluster and nodepool reach `Ready` condition `status: "True"`
-- Both at `generation: 1`, `Reconciled: True`
+- Nodepool `generation` equals 1
+- Nodepool `Reconciled` condition `status: "True"` with `observed_generation: 1`
+- Nodepool `Available` condition `status: "True"` with `observed_generation: 1`
+- All required nodepool adapters report `observed_generation: 1`
+- **Per-adapter conditions on nodepool status**: each required adapter condition on the nodepool resource has `status: "True"`
 
 #### Step 2: Send PATCH request to update the nodepool spec
 
@@ -84,7 +85,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
 - All nodepool adapters report `observed_generation: 2`
 - Each adapter has `Applied: True`, `Available: True`, `Health: True`
 
-#### Step 4: Verify nodepool reaches Reconciled=True at new generation
+#### Step 4: Verify nodepool reaches Reconciled=True and Available=True at new generation
 
 **Action:**
 ```bash
@@ -93,7 +94,11 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepo
 
 **Expected Result:**
 - Nodepool `Reconciled` condition `status: "True"` with `observed_generation: 2`
-- Nodepool `Ready` condition `status: "True"`
+- Nodepool `Available` condition `status: "True"` with `observed_generation: 2`
+- Nodepool `id` is unchanged from Step 1
+- Nodepool `cluster_id` is unchanged from Step 1
+- `generation` equals 2
+- **Per-adapter conditions on nodepool status**: each required adapter condition on the nodepool resource has `status: "True"`
 
 #### Step 5: Verify parent cluster is unaffected
 
@@ -105,7 +110,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 **Expected Result:**
 - Cluster `generation` remains at 1 (unchanged)
 - Cluster `Reconciled` condition `status: "True"` with `observed_generation: 1`
-- Cluster `Ready` condition `status: "True"`
+- Cluster `Available` condition `status: "True"` with `observed_generation: 1`
 
 #### Step 6: Cleanup resources
 
@@ -117,25 +122,24 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 **Expected Result:**
 - Cluster, nodepool, and all associated resources are cleaned up
 
----
 
-## Test Title: PATCH with invalid payload is rejected without changing nodepool state
+## Test Title: Labels-only PATCH bumps generation and triggers reconciliation
 
 ### Description
 
-This test validates that the API rejects malformed or constraint-violating PATCH requests on a nodepool with an HTTP 4xx response, does not increment `generation`, and does not trigger reconciliation. It complements the happy-path update test by covering the negative API contract for nodepool spec mutations.
+This test validates that a PATCH request that only modifies a nodepool's `labels` (without changing `spec`) increments the nodepool's `generation` and triggers adapter reconciliation. Generation is incremented when either `spec` or `labels` change. This mirrors the cluster-level labels PATCH behavior. The parent cluster must remain unaffected.
 
 ---
 
 | **Field** | **Value** |
 |-----------|-----------|
-| **Pos/Neg** | Negative |
+| **Pos/Neg** | Positive |
 | **Priority** | Tier1 |
 | **Status** | Draft |
 | **Automation** | Not Automated |
 | **Version** | Post-MVP |
-| **Created** | 2026-04-16 |
-| **Updated** | 2026-04-16 |
+| **Created** | 2026-04-17 |
+| **Updated** | 2026-04-20 |
 
 ---
 
@@ -144,15 +148,15 @@ This test validates that the API rejects malformed or constraint-violating PATCH
 1. Environment is prepared using [hyperfleet-infra](https://github.com/openshift-hyperfleet/hyperfleet-infra) with all required platform resources
 2. HyperFleet API and HyperFleet Sentinel services are deployed and running successfully
 3. The adapters defined in testdata/adapter-configs are all deployed successfully
-4. PATCH endpoint is deployed and operational with request validation enabled
 
 ---
 
 ### Test Steps
 
-#### Step 1: Create a cluster and nodepool, wait for Ready state
+#### Step 1: Create a cluster and nodepool, wait for Reconciled state
 
 **Action:**
+- Create a cluster and nodepool:
 ```bash
 curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
   -H "Content-Type: application/json" \
@@ -163,69 +167,52 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools \
   -H "Content-Type: application/json" \
   -d @testdata/payloads/nodepools/nodepool-request.json
 ```
-- Wait for both to reach Ready state
+- Wait for both to reach Reconciled state
 
 **Expected Result:**
-- Nodepool at `generation: 1`, `Reconciled: True` with `observed_generation: 1`
+- Cluster and nodepool reach `Reconciled` condition `status: "True"`
+- Both at `generation: 1`, `Reconciled: True`
 
-#### Step 2: Capture baseline state and `last_report_time` per adapter
+#### Step 2: Send labels-only PATCH request to the nodepool
 
 **Action:**
 ```bash
-curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
-  | jq '{id, cluster_id, generation, conditions, labels, spec}'
-curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}/statuses \
-  | jq '[.items[] | {adapter, observed_generation, last_report_time}]'
+curl -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
+  -H "Content-Type: application/json" \
+  -d '{"labels": {"env": "staging", "pool-type": "gpu"}}'
 ```
 
 **Expected Result:**
-- Baseline captured for comparison in Step 4
+- Response returns HTTP 200 (OK)
+- `generation` incremented from 1 to 2
+- Labels in the response include the new values (`env: staging`, `pool-type: gpu`)
+- `spec` is unchanged from Step 1
 
-#### Step 3: Attempt PATCH with invalid payloads
+#### Step 3: Verify nodepool adapters reconcile to the new generation
 
-For each of the following cases, submit a PATCH and verify it is rejected without any state change:
-
-**Case A: Malformed JSON**
+**Action:**
+- Poll nodepool adapter statuses until all report the new generation:
 ```bash
-curl -i -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
-  -H "Content-Type: application/json" \
-  -d '{"replicas": 3'
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}/statuses
 ```
 
-**Case B: Wrong type on a typed spec field (e.g., `replicas` as a string)**
-```bash
-curl -i -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
-  -H "Content-Type: application/json" \
-  -d '{"replicas": "not-a-number"}'
-```
+**Expected Result:**
+- All nodepool adapters report `observed_generation: 2`
+- Each adapter has `Applied: True`, `Available: True`, `Health: True`
 
-**Case C: Attempt to mutate an immutable/server-controlled field (e.g., `id`, `generation`, `cluster_id`)**
-```bash
-curl -i -X PATCH ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
-  -H "Content-Type: application/json" \
-  -d '{"id": "nodepool-other", "generation": 99, "cluster_id": "cluster-other"}'
-```
-
-**Expected Result (for every case):**
-- Response is HTTP 400 (Bad Request) or 422 (Unprocessable Entity) — no 5xx
-- Response body contains a structured validation error message identifying the offending field
-- For Case C, the server either rejects the request or silently ignores the read-only fields (both are acceptable, but read-only fields must remain unchanged)
-
-#### Step 4: Verify nodepool state is unchanged
+#### Step 4: Verify nodepool reaches Reconciled=True and Available=True at new generation
 
 **Action:**
 ```bash
-curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id} \
-  | jq '{id, cluster_id, generation, conditions, labels, spec}'
-curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}/statuses \
-  | jq '[.items[] | {adapter, observed_generation, last_report_time}]'
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/nodepools/{nodepool_id}
 ```
 
 **Expected Result:**
-- `generation` is still 1 (no invalid PATCH incremented it)
-- `id` and `cluster_id` are unchanged from baseline
-- Nodepool `Reconciled` condition remains `status: "True"` with `observed_generation: 1`
-- All adapter `last_report_time` values are unchanged vs baseline (no spurious reconciliation was triggered)
+- Nodepool `generation` equals 2
+- Nodepool `Reconciled` condition `status: "True"` with `observed_generation: 2`
+- Nodepool `Available` condition `status: "True"` with `observed_generation: 2`
+- Labels reflect the PATCH update
+- `spec` is unchanged
 
 #### Step 5: Verify parent cluster is unaffected
 
@@ -235,8 +222,8 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
 
 **Expected Result:**
-- Cluster `generation` remains at 1
-- Cluster `Reconciled: True` with `observed_generation: 1`
+- Cluster `generation` remains at 1 (unchanged)
+- Cluster `Reconciled` condition `status: "True"` with `observed_generation: 1`
 
 #### Step 6: Cleanup resources
 
@@ -248,4 +235,3 @@ curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 **Expected Result:**
 - Cluster, nodepool, and all associated resources are cleaned up
 
----
