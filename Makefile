@@ -131,6 +131,49 @@ verify: generate fmt-check vet ## Run all verification checks
 .PHONY: check
 check: verify lint test ## Run all checks (fmt, vet, lint, test)
 
+##@ Local kind Development (see docs/local-kind-setup.md)
+
+NAMESPACE ?= hyperfleet
+KIND_CLUSTER ?= kind
+LOCAL_CONTEXT ?= kind-$(KIND_CLUSTER)
+MAESTRO_LOCAL_PORT := $(or $(MAESTRO_LOCAL_PORT),8100)
+
+.PHONY: local-up
+local-up: ## Full local setup: kind cluster + deploy + port-forward
+	./deploy-scripts/kind-local.sh up
+
+.PHONY: local-test
+local-test: build ## Run tier0 E2E tests against local kind cluster
+	HYPERFLEET_API_URL=http://localhost:8000 \
+	MAESTRO_URL=http://localhost:$(MAESTRO_LOCAL_PORT) \
+	./$(BINARY_NAME) test \
+		--label-filter=tier0 --log-level=info
+
+.PHONY: local-undeploy
+local-undeploy: ## Uninstall all components from local kind cluster
+	./deploy-scripts/kind-local.sh undeploy
+
+.PHONY: local-rebuild
+local-rebuild: ## Rebuild + load + restart. Usage: make local-rebuild COMPONENT=adapter [NO_CACHE=1]
+	./deploy-scripts/kind-build-images.sh $(if $(NO_CACHE),--no-cache) $(COMPONENT)
+ifdef COMPONENT
+ifeq ($(COMPONENT),sr)
+	@echo "status-reporter is a sidecar — image reloaded; picked up on next Job creation"
+else
+	kubectl --context $(LOCAL_CONTEXT) rollout restart deployment \
+		-n $(NAMESPACE) -l app.kubernetes.io/name=hyperfleet-$(COMPONENT),app.kubernetes.io/component!=postgresql
+	@echo "Waiting for $(COMPONENT) rollout..."
+	@kubectl --context $(LOCAL_CONTEXT) rollout status deployment \
+		-n $(NAMESPACE) -l app.kubernetes.io/name=hyperfleet-$(COMPONENT),app.kubernetes.io/component!=postgresql --timeout=120s
+endif
+else
+	kubectl --context $(LOCAL_CONTEXT) get deployments -n $(NAMESPACE) -o name | xargs kubectl --context $(LOCAL_CONTEXT) rollout restart -n $(NAMESPACE)
+	@echo "Waiting for rollout to complete..."
+	@kubectl --context $(LOCAL_CONTEXT) rollout status deployment -n $(NAMESPACE) --timeout=120s
+endif
+	@echo "Re-establishing port-forwards..."
+	@./deploy-scripts/kind-local.sh port-forward
+
 ##@ Container Images
 
 .PHONY: image
