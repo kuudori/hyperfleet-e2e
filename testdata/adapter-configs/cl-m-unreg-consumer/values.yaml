@@ -37,3 +37,10 @@ rbac:
      - namespaces
      - configmaps
      - configmaps/status
+
+labels:
+  e2e.hyperfleet.io/run-id: ${RUN_ID}
+
+env:
+  - name: RUN_ID
+    value: ${RUN_ID}

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,6 +27,9 @@ const (
 	// NotSetPlaceholder indicates a configuration value has not been set
 	NotSetPlaceholder = "<not set>"
 )
+
+// Validate RunID is a valid Kubernetes label value and is not empty for resource cleanup tracking
+var LabelValueRegex = regexp.MustCompile(`^[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?$`)
 
 // EnvVar constructs an environment variable name with the HYPERFLEET prefix
 // Example: EnvVar("LOG_LEVEL") returns "HYPERFLEET_LOG_LEVEL"
@@ -130,6 +134,7 @@ type Config struct {
 	GCPProjectID      string                  `yaml:"gcpProjectId" mapstructure:"gcpProjectId"`
 	OutputDir         string                  `yaml:"outputDir" mapstructure:"outputDir"`
 	TestDataDir       string                  `yaml:"testDataDir" mapstructure:"testDataDir"`
+	RunID             string                  `yaml:"runId" mapstructure:"runId"`
 	API               APIConfig               `yaml:"api" mapstructure:"api"`
 	Timeouts          TimeoutsConfig          `yaml:"timeouts" mapstructure:"timeouts"`
 	Polling           PollingConfig           `yaml:"polling" mapstructure:"polling"`
@@ -364,6 +369,11 @@ func (c *Config) applyDefaults() {
 		}
 	}
 
+	// RunID: from config file or RUN_ID env var
+	if c.RunID == "" {
+		c.RunID = os.Getenv("RUN_ID")
+	}
+
 	// Apply adapter deployment values from environment variables or config file
 
 	// ChartRepo: from ADAPTER_CHART_REPO env var or config file
@@ -430,6 +440,16 @@ func (c *Config) Validate() error {
       • Config file: api.url: <url>`)
 	}
 
+	if !dryRun {
+		if c.RunID == "" {
+			return fmt.Errorf("RUN_ID must be set for resource cleanup tracking. Set runId in test config or set RUN_ID env variable")
+		}
+
+		if len(c.RunID) > 63 || !LabelValueRegex.MatchString(c.RunID) {
+			return fmt.Errorf("RunID %q is not a valid Kubernetes label value", c.RunID)
+		}
+	}
+
 	// Validate that all timeouts and polling interval are positive
 	if c.Timeouts.Cluster.Reconciled <= 0 {
 		return fmt.Errorf("configuration validation failed: timeouts.cluster.reconciled must be a positive duration, got %v", c.Timeouts.Cluster.Reconciled)
@@ -461,6 +481,7 @@ func (c *Config) Display() {
 		"gcp_project_id", c.GCPProjectID,
 		"output_dir", c.OutputDir,
 		"testdata_dir", c.TestDataDir,
+		"run_id", c.RunID,
 		"timeout_cluster_reconciled", c.Timeouts.Cluster.Reconciled,
 		"timeout_cluster_deleted", c.Timeouts.Cluster.Deleted,
 		"timeout_nodepool_reconciled", c.Timeouts.NodePool.Reconciled,

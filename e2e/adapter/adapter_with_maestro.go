@@ -510,9 +510,10 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 				deployOpts.ReleaseName = releaseName
 				deployOpts.AdapterName = adapterName
 
+				// Set adapterRelease BEFORE deployment so cleanup will run even if deployment fails
+				adapterRelease = releaseName
 				err = h.DeployAdapter(ctx, deployOpts)
 				Expect(err).NotTo(HaveOccurred(), "failed to deploy test adapter")
-				adapterRelease = releaseName
 				ginkgo.GinkgoWriter.Printf("Successfully deployed adapter: %s (release: %s)\n", adapterName, releaseName)
 
 				// Create cluster after adapter is deployed
@@ -655,9 +656,10 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 				deployOpts.ReleaseName = releaseName
 				deployOpts.AdapterName = adapterName
 
+				// Set adapterRelease BEFORE deployment so cleanup will run even if deployment fails
+				adapterRelease = releaseName
 				err = h.DeployAdapter(ctx, deployOpts)
 				Expect(err).NotTo(HaveOccurred(), "failed to deploy test adapter")
-				adapterRelease = releaseName
 				ginkgo.GinkgoWriter.Printf("Successfully deployed adapter: %s (release: %s)\n", adapterName, releaseName)
 
 				// Create cluster after adapter is deployed
@@ -843,9 +845,11 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 				deployOpts.ReleaseName = releaseName
 				deployOpts.AdapterName = adapterName
 
+				// Set adapterRelease BEFORE deployment so cleanup will run even if deployment fails
+				adapterRelease = releaseName
+
 				err = h.DeployAdapter(ctx, deployOpts)
 				Expect(err).NotTo(HaveOccurred(), "failed to deploy test adapter")
-				adapterRelease = releaseName
 				ginkgo.GinkgoWriter.Printf("Successfully deployed adapter: %s (release: %s)\n", adapterName, releaseName)
 
 				// Create cluster after adapter is deployed
@@ -1011,9 +1015,9 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					"adapterConfig.hyperfleetApi.baseUrl": "http://invalid-hyperfleet-api-endpoint.local:9999",
 				}
 
+				adapterRelease = releaseName
 				err = h.DeployAdapter(ctx, deployOpts)
 				Expect(err).NotTo(HaveOccurred(), "failed to deploy test adapter")
-				adapterRelease = releaseName
 				ginkgo.GinkgoWriter.Printf("Successfully deployed adapter: %s (release: %s)\n", adapterName, releaseName)
 
 				// Create cluster after adapter is deployed

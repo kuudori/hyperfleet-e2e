@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -21,6 +22,9 @@ import (
 // Client wraps kubernetes.Interface and provides business logic methods
 type Client struct {
 	kubernetes.Interface
+}
+type DynamicClient struct {
+	dynamic.Interface
 }
 
 // NewClient initializes a Kubernetes clientset from kubeconfig
@@ -43,6 +47,22 @@ func NewClient() (*Client, error) {
 	}
 
 	return &Client{Interface: clientset}, nil
+}
+
+func NewDynamicClient() (*DynamicClient, error) {
+	// Build config from KUBECONFIG env var or default ~/.kube/config
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		loadingRules, &clientcmd.ConfigOverrides{}).ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load kubeconfig: %w", err)
+	}
+	config.UserAgent = "hyperfleet-e2e-tests"
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+	}
+	return &DynamicClient{Interface: dynamicClient}, nil
 }
 
 // DeleteNamespaceAndWait deletes a namespace and waits for it to be fully removed
