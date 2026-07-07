@@ -49,8 +49,9 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 
 			// Set up base deployment options with common fields
 			baseDeployOpts = helper.AdapterDeploymentOptions{
-				Namespace: h.Cfg.Namespace,
-				ChartPath: chartPath,
+				Namespace:    h.Cfg.Namespace,
+				ChartPath:    chartPath,
+				ResourceType: helper.ResourceTypeClusters,
 			}
 		})
 
@@ -85,11 +86,11 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 						ginkgo.GinkgoWriter.Printf("Successfully uninstalled adapter: %s\n", releaseName)
 					}
 
-					// Clean up Pub/Sub subscription created by the adapter
-					ginkgo.By("Clean up Pub/Sub subscription")
-					subscriptionID := h.Cfg.Namespace + "-" + helper.ResourceTypeClusters + "-" + adapterName
-					if err := h.DeletePubSubSubscription(ctx, subscriptionID); err != nil {
-						ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription %s: %v\n", subscriptionID, err)
+					if h.Cfg.BrokerType == "googlepubsub" {
+						ginkgo.By("Clean up Pub/Sub subscription and dlq topic for adapter")
+						if err := h.DeletePubSubResourcesForAdapter(ctx, adapterName, deployOpts.ResourceType); err != nil {
+							ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription and dlq topic for adapter %s: %v\n", adapterName, err)
+						}
 					}
 				})
 				Expect(err).NotTo(HaveOccurred(), "failed to deploy cl-param-error adapter")

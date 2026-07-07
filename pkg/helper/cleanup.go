@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper/helm"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/logger"
 )
@@ -25,17 +26,32 @@ var (
 )
 
 type CleanupHelper struct {
+	cfg                      *config.Config
 	k8sClient                *kubernetes.Client
 	dynamicClient            *kubernetes.DynamicClient
 	labelSelectorListOptions metav1.ListOptions
+	adapterDeploymentList    *AdapterDeploymentList
 }
 
-// NewCleanupHelper creates a new CleanupHelper with the given label selector
-func NewCleanupHelper(labelSelector string) (*CleanupHelper, error) {
+// NewCleanupHelper creates a new CleanupHelper
+// It creates a new helper instance and uses it to cleanup resources
+func NewCleanupHelper() (*CleanupHelper, error) {
+	cfg := GetSuiteConfig()
+	if cfg == nil {
+		return nil, fmt.Errorf("config must be set for resource cleanup tracking")
+	}
 	k8sClient, err := kubernetes.NewClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
+
+	adapterDeploymentList := GetAdapterDeploymentList()
+	if adapterDeploymentList == nil {
+		return nil, fmt.Errorf("adapter deployment list must be set for resource cleanup tracking")
+	}
+	// RUN_ID is set when tests are executed, forms the label: e2e.hyperfleet.io/run-id=<run_id>
+	// Label applied to adapters and resources created during test suite execution
+	labelSelector := fmt.Sprintf("e2e.hyperfleet.io/run-id=%s", cfg.RunID)
 	dynamicClient, err := kubernetes.NewDynamicClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
@@ -43,25 +59,14 @@ func NewCleanupHelper(labelSelector string) (*CleanupHelper, error) {
 	labelSelectorListOptions := metav1.ListOptions{
 		LabelSelector: labelSelector,
 	}
-	return &CleanupHelper{k8sClient: k8sClient, dynamicClient: dynamicClient, labelSelectorListOptions: labelSelectorListOptions}, nil
+
+	return &CleanupHelper{k8sClient: k8sClient, dynamicClient: dynamicClient, labelSelectorListOptions: labelSelectorListOptions, cfg: cfg, adapterDeploymentList: adapterDeploymentList}, nil
 }
 
 // CleanupResources is the entry point for the end-of-suite cleanup mechanism that does a final sweep
 // Using the label selector = e2e.hyperfleet.io/run-id=<run-id> that is set when the tests are initiated
 func CleanupResources() {
-	cfg := GetSuiteConfig()
-	if cfg == nil {
-		logger.Error("Suite config not initialized")
-		return
-	}
-	if cfg.RunID == "" {
-		logger.Error("RUN_ID must be set for resource cleanup tracking")
-		return
-	}
-	// RUN_ID is set when tests are executed, forms the label: e2e.hyperfleet.io/run-id=<run_id>
-	// Label applied to adapters and resources created during test suite execution
-	labelSelector := fmt.Sprintf("e2e.hyperfleet.io/run-id=%s", cfg.RunID)
-	cleanupHelper, err := NewCleanupHelper(labelSelector)
+	c, err := NewCleanupHelper()
 	if err != nil {
 		logger.Error("failed to create cleanup helper", "error", err)
 		return
@@ -71,8 +76,8 @@ func CleanupResources() {
 	defer cancel()
 
 	// Step 1: Remove all helm releases installed with the given label selector
-	helmClient := helm.NewClient(cfg.Namespace)
-	releases, err := helmClient.ListReleasesBySelector(labelSelector)
+	helmClient := helm.NewClient(c.cfg.Namespace)
+	releases, err := helmClient.ListReleasesBySelector(c.labelSelectorListOptions.LabelSelector)
 	if err != nil {
 		// Failed to list releases, so skipping uninstall
 		logger.Error("failed to list helm releases", "error", err)
@@ -80,7 +85,7 @@ func CleanupResources() {
 	} else {
 		logger.Info("found helm releases", "count", len(releases))
 		for _, release := range releases {
-			err := helmClient.UninstallRelease(ctx, release, cfg.Namespace)
+			err := helmClient.UninstallRelease(ctx, release, c.cfg.Namespace)
 			if err != nil {
 				logger.Error("failed to uninstall helm release", "name", release, "error", err)
 				continue
@@ -90,11 +95,43 @@ func CleanupResources() {
 	}
 
 	// Step 2: Sweep resources that contain the given label selector
-	if err := cleanupHelper.SweepLabeledResources(ctx); err != nil {
+	if err := c.SweepLabeledResources(ctx); err != nil {
 		logger.Error("failed to cleanup test resources", "error", err)
-		return
 	}
+
+	// Step 3: Sweep Pub/Sub test adapter resources
+	if c.cfg.BrokerType == "googlepubsub" {
+		if err := c.SweepPubsubTestAdapterResources(ctx); err != nil {
+			logger.Error("failed to cleanup Pub/Sub test resources", "error", err)
+		}
+	}
+
 	logger.Info("test resources cleaned up")
+}
+
+func (c *CleanupHelper) SweepPubsubTestAdapterResources(ctx context.Context) error {
+	// Get a snapshot of the adapter deployment list to avoid race conditions
+	deployments := c.adapterDeploymentList.Snapshot()
+	var errorList []string
+	for _, deployment := range deployments {
+		resourceType := deployment.ResourceType
+		adapterName := deployment.AdapterName
+		namespace := c.cfg.Namespace
+		projectID := c.cfg.GCPProjectID
+		topicID := fmt.Sprintf("%s-%s-%s-dlq", namespace, resourceType, adapterName)
+		subscriptionID := fmt.Sprintf("%s-%s-%s", namespace, resourceType, adapterName)
+		if err := DeletePubSubSubscription(ctx, subscriptionID, projectID); err != nil {
+			errorList = append(errorList, subscriptionID)
+		}
+		if err := DeletePubSubTopic(ctx, topicID, projectID); err != nil {
+			errorList = append(errorList, topicID)
+		}
+	}
+	if len(errorList) > 0 {
+		return fmt.Errorf("failed to delete some Pub/Sub resources: %s", strings.Join(errorList, ", "))
+	}
+	logger.Info("deleted Pub/Sub resources for adapters", "count", len(deployments))
+	return nil
 }
 
 // SweepLabeledResources iterates through labeled resources and deletes any orphaned resources
@@ -124,8 +161,8 @@ func (c *CleanupHelper) SweepLabeledResources(ctx context.Context) error {
 	}
 
 	// Phase 3: Wait for deletion to complete (poll until resources are gone or timeout)
-	logger.Info("Phase 3: Waiting for deletion to complete (polling for up to 1 minute)")
-	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
+	logger.Info("Phase 3: Waiting for deletion to complete (polling for up to 3 minutes)")
+	err := wait.PollUntilContextTimeout(ctx, 1*time.Minute, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 		remaining, err := c.countRemainingResources(ctx)
 		if err != nil {
 			logger.Error("failed to count remaining resources", "error", err)

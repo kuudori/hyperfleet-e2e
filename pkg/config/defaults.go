@@ -72,4 +72,7 @@ var (
 	DefaultNodePoolAdapters = []string{
 		"nodepools-configmap",
 	}
+
+	// DefaultBrokerType is the default broker type
+	DefaultBrokerType = "googlepubsub"
 )

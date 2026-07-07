@@ -209,6 +209,92 @@ func TestGenerateAdapterReleaseName_LongNameCollision(t *testing.T) {
 	}
 }
 
+func TestDeletePubSubTopic(t *testing.T) {
+	tests := []struct {
+		name               string
+		projectID          string
+		deleteErr          error
+		factoryErr         error
+		wantErr            bool
+		wantErrMsg         string
+		wantDefaultProject bool
+	}{
+		{
+			name:      "topic deleted successfully",
+			projectID: "test-project",
+		},
+		{
+			name:      "topic not found is noop",
+			projectID: "test-project",
+			deleteErr: status.Error(codes.NotFound, "Topic does not exist"),
+		},
+		{
+			name:       "permission denied is hard error",
+			projectID:  "test-project",
+			deleteErr:  status.Error(codes.PermissionDenied, "caller does not have permission"),
+			wantErr:    true,
+			wantErrMsg: "failed to delete Pub/Sub topic",
+		},
+		{
+			name:       "other error propagated",
+			projectID:  "test-project",
+			deleteErr:  errors.New("connection refused"),
+			wantErr:    true,
+			wantErrMsg: "failed to delete Pub/Sub topic",
+		},
+		{
+			name:       "factory error propagated",
+			projectID:  "test-project",
+			factoryErr: errors.New("auth failed"),
+			wantErr:    true,
+			wantErrMsg: "auth failed",
+		},
+		{
+			name:               "empty project uses default",
+			wantDefaultProject: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedProjectID string
+			var cleanupCalled bool
+
+			original := newPubSubTopicDeleteFunc
+			t.Cleanup(func() { newPubSubTopicDeleteFunc = original })
+
+			newPubSubTopicDeleteFunc = func(_ context.Context, projectID, _ string) (func(context.Context) error, func(), error) {
+				capturedProjectID = projectID
+				if tt.factoryErr != nil {
+					return nil, nil, tt.factoryErr
+				}
+				return func(context.Context) error { return tt.deleteErr }, func() { cleanupCalled = true }, nil
+			}
+
+			err := DeletePubSubTopic(context.Background(), "test-topic", tt.projectID)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.wantErrMsg != "" && !strings.Contains(err.Error(), tt.wantErrMsg) {
+					t.Errorf("error %q does not contain %q", err.Error(), tt.wantErrMsg)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.wantDefaultProject && capturedProjectID != defaultGCPProjectID {
+				t.Errorf("expected default project %q, got %q", defaultGCPProjectID, capturedProjectID)
+			}
+
+			if tt.factoryErr == nil && !cleanupCalled {
+				t.Error("cleanup function was not called")
+			}
+		})
+	}
+}
+
 func TestDeletePubSubSubscription(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -271,8 +357,7 @@ func TestDeletePubSubSubscription(t *testing.T) {
 				return func(context.Context) error { return tt.deleteErr }, func() { cleanupCalled = true }, nil
 			}
 
-			h := &Helper{Cfg: &config.Config{GCPProjectID: tt.projectID}}
-			err := h.DeletePubSubSubscription(context.Background(), "test-sub")
+			err := DeletePubSubSubscription(context.Background(), "test-sub", tt.projectID)
 
 			if tt.wantErr {
 				if err == nil {

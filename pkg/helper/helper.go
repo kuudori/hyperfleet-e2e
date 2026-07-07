@@ -19,10 +19,11 @@ import (
 
 // Helper provides utility functions for e2e tests
 type Helper struct {
-	Cfg           *config.Config
-	Client        *client.HyperFleetClient
-	K8sClient     *k8sclient.Client
-	MaestroClient *maestro.Client
+	Cfg                   *config.Config
+	Client                *client.HyperFleetClient
+	K8sClient             *k8sclient.Client
+	MaestroClient         *maestro.Client
+	AdapterDeploymentList *AdapterDeploymentList
 }
 
 // TestDataPath resolves a relative path within the testdata directory

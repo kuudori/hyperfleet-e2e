@@ -142,6 +142,7 @@ type Config struct {
 	Adapters          AdaptersConfig          `yaml:"adapters" mapstructure:"adapters"`
 	AdapterDeployment AdapterDeploymentConfig `yaml:"adapterDeployment" mapstructure:"adapterDeployment"`
 	APIDeployment     APIDeploymentConfig     `yaml:"apiDeployment" mapstructure:"apiDeployment"`
+	BrokerType        string                  `yaml:"brokerType" mapstructure:"brokerType"`
 }
 
 // APIConfig contains API-related configuration
@@ -351,6 +352,14 @@ func (c *Config) applyDefaults() {
 		c.GCPProjectID = os.Getenv("GCP_PROJECT_ID")
 	}
 
+	if c.BrokerType == "" {
+		if envVal := os.Getenv("BROKER_TYPE"); envVal != "" {
+			c.BrokerType = envVal
+		} else {
+			c.BrokerType = DefaultBrokerType
+		}
+	}
+
 	// OutputDir: from config file, OUTPUT_DIR env var, or default to "output"
 	if c.OutputDir == "" {
 		if envVal := os.Getenv("OUTPUT_DIR"); envVal != "" {
@@ -448,6 +457,10 @@ func (c *Config) Validate() error {
 		if len(c.RunID) > 63 || !LabelValueRegex.MatchString(c.RunID) {
 			return fmt.Errorf("RunID %q is not a valid Kubernetes label value", c.RunID)
 		}
+	}
+	// Validate broker type
+	if c.BrokerType != "googlepubsub" && c.BrokerType != "rabbitmq" {
+		return fmt.Errorf("configuration validation failed: brokerType must be one of: googlepubsub, rabbitmq. Got: %s", c.BrokerType)
 	}
 
 	// Validate that all timeouts and polling interval are positive

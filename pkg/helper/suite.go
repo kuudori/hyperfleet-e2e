@@ -11,8 +11,9 @@ import (
 
 var (
 	// suiteConfig is loaded once in cmd layer before tests start
-	suiteConfig *config.Config
-	configMutex sync.RWMutex
+	suiteConfig           *config.Config
+	configMutex           sync.RWMutex
+	adapterDeploymentList *AdapterDeploymentList
 )
 
 // SetSuiteConfig sets the global suite configuration for the test suite
@@ -36,6 +37,18 @@ func ClearSuiteConfig() {
 	suiteConfig = nil
 }
 
+func SetAdapterDeploymentList(list *AdapterDeploymentList) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+	adapterDeploymentList = list
+}
+
+func GetAdapterDeploymentList() *AdapterDeploymentList {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return adapterDeploymentList
+}
+
 // New creates a helper instance for testing
 // Creates a new helper per test
 func New() *Helper {
@@ -43,31 +56,25 @@ func New() *Helper {
 	if cfg == nil {
 		log.Fatalf("Suite config not initialized")
 	}
-
-	h, err := newHelper(cfg)
-	if err != nil {
-		log.Fatalf("Failed to create helper: %v", err)
+	adapterDeploymentList := GetAdapterDeploymentList()
+	if adapterDeploymentList == nil {
+		log.Fatalf("Adapter deployment list not initialized")
 	}
-	return h
-}
 
-// newHelper creates a new Helper instance (internal use)
-func newHelper(cfg *config.Config) (*Helper, error) {
 	cl, err := client.NewHyperFleetClient(cfg.API.URL, nil)
 	if err != nil {
-		return nil, err
+		log.Fatalf("Failed to create HyperFleet client: %v", err)
 	}
 
 	k8sClient, err := k8sclient.NewClient()
 	if err != nil {
-		return nil, err
+		log.Fatalf("Failed to create K8s client: %v", err)
 	}
 
 	return &Helper{
-		Cfg:       cfg,
-		Client:    cl,
-		K8sClient: k8sClient,
-		// MaestroClient is initialized lazily via GetMaestroClient() to avoid
-		// unnecessary K8s API calls in test suites that don't use Maestro
-	}, nil
+		Cfg:                   cfg,
+		Client:                cl,
+		K8sClient:             k8sClient,
+		AdapterDeploymentList: adapterDeploymentList,
+	}
 }

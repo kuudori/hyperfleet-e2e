@@ -37,6 +37,12 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	cfg.Display()
 	logger.Info("starting hyperfleet-e2e test suite - creating resources with", "run-id", cfg.RunID)
+
+	// Initialize adapter deployment list - for test tiers that deploy temporary adapters
+	adapterDeploymentList := helper.InitAdapterDeploymentList()
+	helper.SetAdapterDeploymentList(adapterDeploymentList)
+
+	logger.Info("starting hyperfleet-e2e test suite - each test creates temporary resources")
 })
 
 var _ = ginkgo.AfterSuite(func() {

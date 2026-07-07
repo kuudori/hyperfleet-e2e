@@ -431,6 +431,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 			h              *helper.Helper
 			clusterID      string
 			adapterRelease string // Track deployed adapter release name for cleanup
+			adapterName    string // Track deployed adapter name for cleanup
 			chartPath      string
 			baseDeployOpts helper.AdapterDeploymentOptions
 		)
@@ -439,6 +440,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 			h = helper.New()
 			adapterRelease = ""
 			clusterID = ""
+			adapterName = ""
 
 			// Clone adapter Helm chart repository (shared across negative tests)
 			ginkgo.By("Clone adapter Helm chart repository for negative tests")
@@ -454,6 +456,12 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 			Expect(err).NotTo(HaveOccurred(), "failed to clone adapter Helm chart")
 			ginkgo.GinkgoWriter.Printf("Cloned adapter chart to: %s\n", chartPath)
 
+			// Set up base deployment options with common fields
+			baseDeployOpts = helper.AdapterDeploymentOptions{
+				Namespace:    h.Cfg.Namespace,
+				ChartPath:    chartPath,
+				ResourceType: helper.ResourceTypeClusters,
+			}
 			// Ensure chart cleanup after test
 			ginkgo.DeferCleanup(func(ctx context.Context) {
 				ginkgo.By("Cleanup cloned Helm chart")
@@ -476,19 +484,21 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						ginkgo.GinkgoWriter.Printf("Warning: failed to cleanup cluster %s: %v\n", clusterID, err)
 					}
 				}
+				if adapterName != "" {
+					if h.Cfg.BrokerType == "googlepubsub" {
+						ginkgo.By("Clean up Pub/Sub subscription and dlq topic for adapter")
+						if err := h.DeletePubSubResourcesForAdapter(ctx, adapterName, baseDeployOpts.ResourceType); err != nil {
+							ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription and dlq topic for adapter %s: %v\n", adapterName, err)
+						}
+					}
+				}
 			})
-
-			// Set up base deployment options with common fields
-			baseDeployOpts = helper.AdapterDeploymentOptions{
-				Namespace: h.Cfg.Namespace,
-				ChartPath: chartPath,
-			}
 		})
 
 		ginkgo.It("should fail when targeting unregistered Maestro consumer and report appropriate error",
 			func(ctx context.Context) {
 				// Test-specific adapter configuration
-				adapterName := "cl-m-unreg-consumer"
+				adapterName = "cl-m-unreg-consumer"
 				err := os.Setenv("ADAPTER_NAME", adapterName)
 				Expect(err).NotTo(HaveOccurred(), "failed to set ADAPTER_NAME environment variable")
 				ginkgo.DeferCleanup(func() {
@@ -634,7 +644,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 		ginkgo.It("should fail to discover ManifestWork when discovery name does not match created resource",
 			func(ctx context.Context) {
 				// Test-specific adapter configuration
-				adapterName := "cl-m-wrong-ds"
+				adapterName = "cl-m-wrong-ds"
 				// Set environment variable for envsubst expansion in values.yaml
 				err := os.Setenv("ADAPTER_NAME", adapterName)
 				Expect(err).NotTo(HaveOccurred(), "failed to set ADAPTER_NAME environment variable")
@@ -821,7 +831,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 		ginkgo.It("should fail nested discovery when resource names are wrong",
 			func(ctx context.Context) {
 				// Test-specific adapter configuration
-				adapterName := "cl-m-wrong-nest"
+				adapterName = "cl-m-wrong-nest"
 				// Set environment variable for envsubst expansion in values.yaml
 				err := os.Setenv("ADAPTER_NAME", adapterName)
 				Expect(err).NotTo(HaveOccurred(), "failed to set ADAPTER_NAME environment variable")
@@ -987,7 +997,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 		ginkgo.It("should fail post-action when status API is unreachable",
 			func(ctx context.Context) {
 				// Use cl-m-bad-api adapter with overridden API URL
-				adapterName := "cl-m-bad-api"
+				adapterName = "cl-m-bad-api"
 				// Set environment variable for envsubst expansion in values.yaml
 				err := os.Setenv("ADAPTER_NAME", adapterName)
 				Expect(err).NotTo(HaveOccurred(), "failed to set ADAPTER_NAME environment variable")
