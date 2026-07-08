@@ -7,32 +7,38 @@ params:
     type: "string"
     required: true
 
-preconditions:
   - name: "clusterStatus"
-    api_call:
-      method: "GET"
-      url: "/clusters/{{ .clusterId }}"
-      timeout: 10s
-      retry_attempts: 3
-      retry_backoff: "exponential"
-    capture:
-      - name: "clusterName"
-        field: "name"
-      - name: "generationSpec"
-        field: "generation"
-      - name: "clusterNotReconciled"
-        expression: |
-          status.conditions.filter(c, c.type == "Reconciled").size() > 0
-            ? status.conditions.filter(c, c.type == "Reconciled")[0].status != "True"
-            : true
-      - name: "clusterReconciledTTL"
-        expression: |
-          (timestamp(now()) - timestamp(
-            status.conditions.filter(c, c.type == "Reconciled").size() > 0
-              ? status.conditions.filter(c, c.type == "Reconciled")[0].last_transition_time
-              : now()
-          )).getSeconds() > 300
+    source:
+      api_call:
+        method: "GET"
+        url: "/clusters/{{ .clusterId }}"
+        timeout: 10s
+        retry_attempts: 3
+        retry_backoff: "exponential"
 
+  - name: "clusterName"
+    source: "clusterStatus.name"
+
+  - name: "generationSpec"
+    source: "clusterStatus.generation"
+
+  - name: "clusterNotReconciled"
+    source:
+      expression: |
+        clusterStatus.status.conditions.filter(c, c.type == "Reconciled").size() > 0
+          ? clusterStatus.status.conditions.filter(c, c.type == "Reconciled")[0].status != "True"
+          : true
+
+  - name: "clusterReconciledTTL"
+    source:
+      expression: |
+        (timestamp(now()) - timestamp(
+          clusterStatus.status.conditions.filter(c, c.type == "Reconciled").size() > 0
+            ? clusterStatus.status.conditions.filter(c, c.type == "Reconciled")[0].last_transition_time
+            : now()
+        )).getSeconds() > 300
+
+preconditions:
   - name: "validationCheck"
     expression: |
       clusterNotReconciled || clusterReconciledTTL
