@@ -313,7 +313,7 @@ kubectl delete namespace {cluster_id} --ignore-not-found
 
 ### Description
 
-This test validates that the end-to-end workflow correctly handles non-required adapter failure scenarios. When a non-required adapter's precondition configuration contains an invalid API endpoint URL, the adapter framework should detect the failure and report error status via the adapter statuses endpoint. Because `cl-precondition-error` is not in the required adapters list, its failure must not affect the cluster's aggregated conditions (`Reconciled`, `LastKnownReconciled`) — the cluster should still reach `Reconciled=True` once all required adapters complete. This validates the isolation guarantee defined in ADR-0008 (Dynamic Status Aggregation).
+This test validates that the end-to-end workflow correctly handles non-required adapter failure scenarios. When a non-required adapter's params configuration contains an invalid API endpoint URL (source.api_call), the adapter framework detects the param extraction failure and aborts execution early — post_actions never run, so no adapter status is reported to the API. Because `cl-precondition-error` is not in the required adapters list, its failure must not affect the cluster's aggregated conditions (`Reconciled`, `LastKnownReconciled`) — the cluster should still reach `Reconciled=True` once all required adapters complete. This validates the isolation guarantee defined in ADR-0008 (Dynamic Status Aggregation).
 
 ---
 
@@ -325,7 +325,7 @@ This test validates that the end-to-end workflow correctly handles non-required 
 | **Automation** | Automated |
 | **Version** | MVP |
 | **Created** | 2026-02-11 |
-| **Updated** | 2026-05-13 |
+| **Updated** | 2026-07-08 |
 
 
 ---
@@ -339,18 +339,19 @@ This test validates that the end-to-end workflow correctly handles non-required 
 
 ### Test Steps
 
-#### Step 1: Deploy dedicated precondition-error-adapter with invalid precondition URL
+#### Step 1: Deploy dedicated adapter with invalid API URL in params
 **Action:**
-- Deploy a precondition-error-adapter via Helm with AdapterConfig containing a precondition that references an invalid API endpoint URL, separate from the normal adapters used in other tests. For example:
+- Deploy a precondition-error-adapter via Helm with AdapterConfig containing a param-phase api_call that references an invalid API endpoint URL, separate from the normal adapters used in other tests. For example:
 ```yaml
-preconditions:
+params:
   - name: "clusterStatus"
-    apiCall:
-      method: "GET"
-      url: "http://invalid-service:8080/api/nonexistent"
-    capture:
-      - name: "clusterName"
-        field: "name"
+    source:
+      api_call:
+        method: "GET"
+        url: "http://invalid-service:8080/api/nonexistent"
+        timeout: 5s
+        retry_attempts: 1
+        retry_backoff: "exponential"
 ```
 
 **Expected Result:**
@@ -369,21 +370,7 @@ curl -X POST ${API_URL}/api/hyperfleet/v1/clusters \
 **Expected Result:**
 - API returns successful response with cluster ID
 
-#### Step 3: Verify adapter failure is reported via status API
-
-**Action:**
-- Poll adapter statuses until the precondition-error-adapter reports its status:
-```bash
-curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses
-```
-
-**Expected Result:**
-- The precondition-error-adapter is present in the statuses response
-- The adapter reports `Applied` condition with `status: "False"`
-- The adapter reports `Available` condition with `status: "False"`
-- The adapter reports `Health` condition with `status: "False"`, with reason and message indicating precondition failure details
-
-#### Step 4: Verify cluster reconciles normally despite non-required adapter failure
+#### Step 3: Verify cluster reconciles normally despite non-required adapter failure
 
 **Action:**
 - Poll cluster status until reconciliation completes:
@@ -394,7 +381,19 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 **Expected Result:**
 - Cluster reaches `Reconciled` condition with `status: "True"` — non-required adapter failure does not block reconciliation
 - Cluster reaches `LastKnownReconciled` condition with `status: "True"`
-- Note: aggregated conditions (`Reconciled`, `LastKnownReconciled`) evaluate only required adapters per ADR-0008. Since `cl-precondition-error` is not in the required adapters list, its failure is invisible to these conditions. The adapter failure is only visible via the adapter statuses endpoint (Step 3)
+- Note: aggregated conditions (`Reconciled`, `LastKnownReconciled`) evaluate only required adapters per ADR-0008. Since `cl-precondition-error` is not in the required adapters list, its failure is invisible to these conditions
+
+#### Step 4: Verify adapter status is absent
+
+**Action:**
+- Query adapter statuses after cluster reconciliation:
+```bash
+curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses
+```
+
+**Expected Result:**
+- The `cl-precondition-error` adapter is **not present** in the statuses response
+- Param extraction failure causes an early return in the executor (before post_actions), so no status is ever reported to the API
 
 #### Step 5: Cleanup Resources (AfterEach)
 
