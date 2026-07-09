@@ -56,7 +56,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 
 		ginkgo.It("should not block cluster reconciliation when non-required adapter has param extraction failure",
 			func(ctx context.Context) {
-				adapterName := "cl-precondition-error"
+				adapterName := "cl-param-error"
 
 				// Set environment variable for envsubst expansion in values.yaml
 				err := os.Setenv("ADAPTER_NAME", adapterName)
@@ -78,7 +78,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 				err = h.DeployAdapter(ctx, deployOpts)
 				// Ensure adapter cleanup happens after this test
 				ginkgo.DeferCleanup(func(ctx context.Context) {
-					ginkgo.By("Uninstall precondition-error-adapter")
+					ginkgo.By("Uninstall cl-param-error adapter")
 					if err := h.UninstallAdapter(ctx, releaseName, h.Cfg.Namespace); err != nil {
 						ginkgo.GinkgoWriter.Printf("Warning: failed to uninstall adapter %s: %v\n", releaseName, err)
 					} else {
@@ -92,8 +92,8 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 						ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription %s: %v\n", subscriptionID, err)
 					}
 				})
-				Expect(err).NotTo(HaveOccurred(), "failed to deploy precondition-error-adapter")
-				ginkgo.GinkgoWriter.Printf("Deployed precondition-error-adapter: release=%s\n", releaseName)
+				Expect(err).NotTo(HaveOccurred(), "failed to deploy cl-param-error adapter")
+				ginkgo.GinkgoWriter.Printf("Deployed cl-param-error adapter: release=%s\n", releaseName)
 
 				// Create cluster after adapter is deployed
 				ginkgo.By("Submit an API request to create a Cluster resource")
@@ -114,7 +114,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 
 				// Step 3: Verify cluster reconciles normally despite non-required adapter failure
 				ginkgo.By("Verify cluster reconciles normally despite non-required adapter param extraction failure")
-				// cl-precondition-error is a non-required adapter with required:true on a param
+				// cl-param-error is a non-required adapter with required:true on a param
 				// that points to an invalid URL. Param extraction fails → early return → no status reported.
 				// Per ADR-0008, aggregated conditions evaluate only required adapters,
 				// so this adapter's failure does NOT prevent reconciliation.

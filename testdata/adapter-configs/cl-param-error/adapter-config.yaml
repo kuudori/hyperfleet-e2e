@@ -1,5 +1,5 @@
 adapter:
-  name: cl-precondition-error
+  name: cl-param-error
 
 debug_config: false
 log:
