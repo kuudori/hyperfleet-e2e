@@ -25,16 +25,16 @@ params:
   - name: "clusterNotReconciled"
     source:
       expression: |
-        clusterStatus.status.conditions.filter(c, c.type == "Reconciled").size() > 0
-          ? clusterStatus.status.conditions.filter(c, c.type == "Reconciled")[0].status != "True"
+        clusterStatus.?status.?conditions.orValue([]).filter(c, c.type == "Reconciled").size() > 0
+          ? clusterStatus.?status.?conditions.orValue([]).filter(c, c.type == "Reconciled")[0].status != "True"
           : true
 
   - name: "clusterReconciledTTL"
     source:
       expression: |
         (timestamp(now()) - timestamp(
-          clusterStatus.status.conditions.filter(c, c.type == "Reconciled").size() > 0
-            ? clusterStatus.status.conditions.filter(c, c.type == "Reconciled")[0].last_transition_time
+          clusterStatus.?status.?conditions.orValue([]).filter(c, c.type == "Reconciled").size() > 0
+            ? clusterStatus.?status.?conditions.orValue([]).filter(c, c.type == "Reconciled")[0].last_transition_time
             : now()
         )).getSeconds() > 300
 

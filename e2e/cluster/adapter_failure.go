@@ -68,7 +68,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 				// Generate unique release name for this deployment
 				releaseName := helper.GenerateAdapterReleaseName(helper.ResourceTypeClusters, adapterName)
 
-				// Deploy the adapter with invalid API URL in params (causes param extraction failure)
+				// Deploy the adapter with an invalid API URL in params
 				ginkgo.By("Deploy dedicated adapter with invalid API URL in params")
 
 				deployOpts := baseDeployOpts
@@ -112,12 +112,12 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 					}
 				})
 
-				// Step 3: Verify non-required adapter failure does not block cluster reconciliation
+				// Step 3: Verify cluster reconciles normally despite non-required adapter failure
 				ginkgo.By("Verify cluster reconciles normally despite non-required adapter param extraction failure")
-				// cl-precondition-error is a non-required adapter. Per ADR-0008, aggregated
-				// conditions (Reconciled, LastKnownReconciled) evaluate only required adapters,
-				// so this adapter's failure does NOT prevent reconciliation. Verify the cluster
-				// reaches Reconciled=True — proving the isolation invariant holds.
+				// cl-precondition-error is a non-required adapter with required:true on a param
+				// that points to an invalid URL. Param extraction fails → early return → no status reported.
+				// Per ADR-0008, aggregated conditions evaluate only required adapters,
+				// so this adapter's failure does NOT prevent reconciliation.
 				Eventually(func(g Gomega) {
 					cl, err := h.Client.GetCluster(ctx, clusterID)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster")
@@ -132,8 +132,8 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 						"cluster LastKnownReconciled should become True despite non-required adapter failure")
 				}, h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).Should(Succeed())
 
-				// Step 4: Verify adapter status is absent — param extraction failure causes early return
-				// in the executor (before post_actions), so no status is ever reported to the API.
+				// Step 4: Verify adapter status is absent — required param extraction failure
+				// causes early return in executor (before post_actions), so no status is reported.
 				ginkgo.By("Verify adapter status is absent (param extraction failure prevents status reporting)")
 				statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 				Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
@@ -146,9 +146,9 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 					}
 				}
 				Expect(adapterStatus).To(BeNil(),
-					"adapter with param extraction failure should not report status (post_actions never execute)")
+					"adapter with required param extraction failure should not report status (post_actions never execute)")
 
-				ginkgo.GinkgoWriter.Printf("Verified: adapter status absent (param failure), cluster reconciled normally\n")
+				ginkgo.GinkgoWriter.Printf("Verified: adapter status absent (required param failure), cluster reconciled normally\n")
 			})
 	},
 )
