@@ -21,6 +21,7 @@ params:
 
     # API call with INVALID endpoint URL to simulate param extraction failure
     - name: "clusterStatus"
+      required: true
       source:
         api_call:
           method: "GET"

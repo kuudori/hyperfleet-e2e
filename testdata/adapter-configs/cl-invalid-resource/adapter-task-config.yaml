@@ -35,8 +35,8 @@ params:
     - name: "reconciledConditionStatus"
       source:
         expression: |
-          clusterStatus.status.conditions.filter(c, c.type == "Reconciled").size() > 0
-            ? clusterStatus.status.conditions.filter(c, c.type == "Reconciled")[0].status
+          clusterStatus.?status.?conditions.orValue([]).filter(c, c.type == "Reconciled").size() > 0
+            ? clusterStatus.?status.?conditions.orValue([]).filter(c, c.type == "Reconciled")[0].status
             : "False"
 
 preconditions:

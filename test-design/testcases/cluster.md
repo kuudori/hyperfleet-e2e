@@ -313,7 +313,7 @@ kubectl delete namespace {cluster_id} --ignore-not-found
 
 ### Description
 
-This test validates that the end-to-end workflow correctly handles non-required adapter failure scenarios. When a non-required adapter's params configuration contains an invalid API endpoint URL (source.api_call), the adapter framework detects the param extraction failure and aborts execution early — post_actions never run, so no adapter status is reported to the API. Because `cl-precondition-error` is not in the required adapters list, its failure must not affect the cluster's aggregated conditions (`Reconciled`, `LastKnownReconciled`) — the cluster should still reach `Reconciled=True` once all required adapters complete. This validates the isolation guarantee defined in ADR-0008 (Dynamic Status Aggregation).
+This test validates that the end-to-end workflow correctly handles non-required adapter failure scenarios. When a non-required adapter's params configuration contains an invalid API endpoint URL (source.api_call), the adapter framework detects the param extraction failure and aborts execution early — post_actions never run, so no adapter status is reported to the API. Because `cl-param-error` is not in the required adapters list, its failure must not affect the cluster's aggregated conditions (`Reconciled`, `LastKnownReconciled`) — the cluster should still reach `Reconciled=True` once all required adapters complete. This validates the isolation guarantee defined in ADR-0008 (Dynamic Status Aggregation).
 
 ---
 
@@ -341,10 +341,11 @@ This test validates that the end-to-end workflow correctly handles non-required 
 
 #### Step 1: Deploy dedicated adapter with invalid API URL in params
 **Action:**
-- Deploy a precondition-error-adapter via Helm with AdapterConfig containing a param-phase api_call that references an invalid API endpoint URL, separate from the normal adapters used in other tests. For example:
+- Deploy a cl-param-error adapter via Helm with AdapterConfig containing a param-phase api_call that references an invalid API endpoint URL, separate from the normal adapters used in other tests. For example:
 ```yaml
 params:
   - name: "clusterStatus"
+    required: true
     source:
       api_call:
         method: "GET"
@@ -355,7 +356,7 @@ params:
 ```
 
 **Expected Result:**
-- precondition-error-adapter is deployed and running successfully
+- cl-param-error adapter is deployed and running successfully
 
 #### Step 2: Submit an API request to create a Cluster resource
 
@@ -381,7 +382,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 **Expected Result:**
 - Cluster reaches `Reconciled` condition with `status: "True"` — non-required adapter failure does not block reconciliation
 - Cluster reaches `LastKnownReconciled` condition with `status: "True"`
-- Note: aggregated conditions (`Reconciled`, `LastKnownReconciled`) evaluate only required adapters per ADR-0008. Since `cl-precondition-error` is not in the required adapters list, its failure is invisible to these conditions
+- Note: aggregated conditions (`Reconciled`, `LastKnownReconciled`) evaluate only required adapters per ADR-0008. Since `cl-param-error` is not in the required adapters list, its failure is invisible to these conditions
 
 #### Step 4: Verify adapter status is absent
 
@@ -392,7 +393,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses
 ```
 
 **Expected Result:**
-- The `cl-precondition-error` adapter is **not present** in the statuses response
+- The `cl-param-error` adapter is **not present** in the statuses response
 - Param extraction failure causes an early return in the executor (before post_actions), so no status is ever reported to the API
 
 #### Step 5: Cleanup Resources (AfterEach)
@@ -403,7 +404,7 @@ curl -X GET ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}/statuses
 curl -X DELETE ${API_URL}/api/hyperfleet/v1/clusters/{cluster_id}
 ```
 - Wait for hard-delete to complete (cluster returns 404)
-- Uninstall the precondition-error-adapter Helm release
+- Uninstall the cl-param-error adapter Helm release
 - Clean up the Pub/Sub subscription created by the adapter (if using Google Pub/Sub broker):
 ```bash
 gcloud pubsub subscriptions delete {subscription_id} --project={project_id}
@@ -415,7 +416,7 @@ kubectl delete namespace {cluster_id} --ignore-not-found
 
 **Expected Result:**
 - Cluster and all associated resources are cleaned up
-- precondition-error-adapter deployment is removed
+- cl-param-error adapter deployment is removed
 - Pub/Sub subscription is deleted (if applicable)
 
 ---
