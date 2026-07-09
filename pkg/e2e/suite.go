@@ -1,9 +1,8 @@
 package e2e
 
 import (
-	"log"
-
 	"github.com/onsi/ginkgo/v2"
+	"log"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
@@ -37,11 +36,11 @@ var _ = ginkgo.BeforeSuite(func() {
 	}
 
 	cfg.Display()
-
-	logger.Info("starting hyperfleet-e2e test suite - each test creates temporary resources")
+	logger.Info("starting hyperfleet-e2e test suite - creating resources with", "run-id", cfg.RunID)
 })
 
 var _ = ginkgo.AfterSuite(func() {
+	helper.CleanupResources()
 	helper.ClearSuiteConfig()
 	logger.Info("test suite completed")
 })

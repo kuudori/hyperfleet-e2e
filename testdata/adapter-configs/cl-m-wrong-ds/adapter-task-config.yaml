@@ -7,12 +7,14 @@ params:
     source: "event.id"
     type: "string"
     required: true
-
+  - name: "runId"
+    source: "env.RUN_ID"
+    type: "string"
+    required: true
   - name: "generation"
     source: "event.generation"
     type: "int"
     required: true
-
   - name: "namespace"
     source: "env.NAMESPACE"
     type: "string"
@@ -88,8 +90,7 @@ resources:
           app.kubernetes.io/part-of: "hyperfleet"
           app.kubernetes.io/managed-by: "cl-maestro"
           app.kubernetes.io/created-by: "{{ .adapter.name }}"
-
-        # Annotations for metadata and operational information
+          e2e.hyperfleet.io/run-id: "{{ .runId }}"
         annotations:
           # Tracking and lifecycle
           hyperfleet.io/created-by: "cl-maestro-framework"
@@ -123,6 +124,7 @@ resources:
                 app.kubernetes.io/instance: "{{ .adapter.name }}"
                 app.kubernetes.io/name: cl-maestro
                 app.kubernetes.io/transport: maestro
+                e2e.hyperfleet.io/run-id: "{{ .runId }}"
               annotations:
                 hyperfleet.io/generation: "{{ .generation }}"
           - apiVersion: v1
@@ -139,6 +141,7 @@ resources:
                 app.kubernetes.io/name: cl-maestro
                 app.kubernetes.io/version: 1.0.0
                 app.kubernetes.io/transport: maestro
+                e2e.hyperfleet.io/run-id: "{{ .runId }}"
               annotations:
                 hyperfleet.io/generation: "{{ .generation }}"
 

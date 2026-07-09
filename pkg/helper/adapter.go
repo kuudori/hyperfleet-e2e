@@ -195,6 +195,14 @@ func (h *Helper) DeployAdapter(ctx context.Context, opts AdapterDeploymentOption
 		"--set", fmt.Sprintf("fullnameOverride=%s", releaseName),
 	)
 
+	// Add run-id label for resource tracking and cleanup
+	if h.Cfg.RunID != "" {
+		// Label the Helm release itself (for Helm SDK-based cleanup)
+		helmArgs = append(helmArgs,
+			"--labels", fmt.Sprintf("e2e.hyperfleet.io/run-id=%s", h.Cfg.RunID),
+		)
+	}
+
 	// Override image pull policy if set (e.g. IfNotPresent for local kind clusters)
 	if policy := os.Getenv("IMAGE_PULL_POLICY"); policy != "" {
 		helmArgs = append(helmArgs, "--set", fmt.Sprintf("image.pullPolicy=%s", policy))

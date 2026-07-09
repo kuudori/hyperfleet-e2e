@@ -35,3 +35,16 @@ image:
 rbac:
    resources:
      - namespaces
+
+labels:
+  e2e.hyperfleet.io/run-id: ${RUN_ID}
+
+env:
+  - name: SIMULATE_RESULT
+    value: success
+  - name: NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+  - name: RUN_ID
+    value: ${RUN_ID}
