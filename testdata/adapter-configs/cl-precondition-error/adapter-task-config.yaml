@@ -1,6 +1,6 @@
-# Test adapter configuration with invalid precondition URL to test error detection
-# The precondition references a non-existent service, causing the adapter to fail
-# before reaching the resource creation phase.
+# Test adapter configuration with invalid API URL to test error detection
+# The param-phase api_call references a non-existent service, causing the adapter
+# to fail before reaching the precondition/resource phases.
 
 # Parameters with all required variables
 params:
@@ -19,18 +19,21 @@ params:
       required: false
       default: "false"
 
-# Precondition with INVALID API endpoint URL to simulate adapter failure
-preconditions:
-  - name: "clusterStatus"
-    api_call:
-      method: "GET"
-      url: "http://invalid-service:8080/api/nonexistent"
-      timeout: 5s
-      retry_attempts: 1
-      retry_backoff: "exponential"
-    capture:
-      - name: "clusterName"
-        field: "name"
+    # API call with INVALID endpoint URL to simulate param extraction failure
+    - name: "clusterStatus"
+      source:
+        api_call:
+          method: "GET"
+          url: "http://invalid-service:8080/api/nonexistent"
+          timeout: 5s
+          retry_attempts: 1
+          retry_backoff: "exponential"
+
+    - name: "clusterName"
+      source: "clusterStatus.name"
+
+# Preconditions — params-phase failure above prevents reaching this
+preconditions: []
 
 # Resources (will never be reached due to precondition failure)
 resources:

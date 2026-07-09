@@ -17,33 +17,30 @@ params:
       required: false
       default: "false"
 
-# Preconditions with valid operators and CEL expressions
-preconditions:
-  - name: "clusterStatus"
-    api_call:
-      method: "GET"
-      url: "/clusters/{{ .clusterId }}"
-      timeout: 10s
-      retry_attempts: 3
-      retry_backoff: "exponential"
-    capture:
-      - name: "clusterName"
-        field: "name"
-      - name: "generationSpec"
-        field: "generation"
-      - name: "reconciledConditionStatus"
-        expression: |
-          status.conditions.filter(c, c.type == "Reconciled").size() > 0
-            ? status.conditions.filter(c, c.type == "Reconciled")[0].status
-            : "False"
-    # Structured conditions with valid operators
-    conditions:
-      - field: "reconciledConditionStatus"
-        operator: "equals"
-        value: "False"
+    - name: "clusterStatus"
+      source:
+        api_call:
+          method: "GET"
+          url: "/clusters/{{ .clusterId }}"
+          timeout: 10s
+          retry_attempts: 3
+          retry_backoff: "exponential"
 
+    - name: "clusterName"
+      source: "clusterStatus.name"
+
+    - name: "generationSpec"
+      source: "clusterStatus.generation"
+
+    - name: "reconciledConditionStatus"
+      source:
+        expression: |
+          clusterStatus.status.conditions.filter(c, c.type == "Reconciled").size() > 0
+            ? clusterStatus.status.conditions.filter(c, c.type == "Reconciled")[0].status
+            : "False"
+
+preconditions:
   - name: "validationCheck"
-    # Valid CEL expression
     expression: |
       reconciledConditionStatus == "False"
 

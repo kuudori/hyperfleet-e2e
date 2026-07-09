@@ -54,7 +54,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 			}
 		})
 
-		ginkgo.It("should reflect adapter precondition failure in cluster top-level status",
+		ginkgo.It("should not block cluster reconciliation when non-required adapter has param extraction failure",
 			func(ctx context.Context) {
 				adapterName := "cl-precondition-error"
 
@@ -68,8 +68,8 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 				// Generate unique release name for this deployment
 				releaseName := helper.GenerateAdapterReleaseName(helper.ResourceTypeClusters, adapterName)
 
-				// Deploy the precondition-error-adapter with invalid precondition URL
-				ginkgo.By("Deploy dedicated precondition-error-adapter with invalid precondition URL")
+				// Deploy the adapter with invalid API URL in params (causes param extraction failure)
+				ginkgo.By("Deploy dedicated adapter with invalid API URL in params")
 
 				deployOpts := baseDeployOpts
 				deployOpts.ReleaseName = releaseName
@@ -112,51 +112,8 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 					}
 				})
 
-				// Step 3: Verify adapter failure is reported via status API
-				ginkgo.By("Verify adapter failure is reported via status API")
-				Eventually(func(g Gomega) {
-					statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
-					g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
-
-					// Find the precondition-error-adapter in statuses
-					var adapterStatus *openapi.AdapterStatus
-					for i, status := range statuses.Items {
-						if status.Adapter == adapterName {
-							adapterStatus = &statuses.Items[i]
-							break
-						}
-					}
-					g.Expect(adapterStatus).NotTo(BeNil(),
-						"precondition-error-adapter should be present in statuses response")
-
-					// Verify Applied=False
-					g.Expect(h.HasAdapterCondition(adapterStatus.Conditions,
-						client.ConditionTypeApplied, openapi.AdapterConditionStatusFalse)).To(BeTrue(),
-						"precondition-error-adapter should have Applied=False")
-
-					// Verify Available=False
-					g.Expect(h.HasAdapterCondition(adapterStatus.Conditions,
-						client.ConditionTypeAvailable, openapi.AdapterConditionStatusFalse)).To(BeTrue(),
-						"precondition-error-adapter should have Available=False")
-
-					// Verify Health=False with reason/message indicating precondition failure
-					g.Expect(h.HasAdapterCondition(adapterStatus.Conditions,
-						client.ConditionTypeHealth, openapi.AdapterConditionStatusFalse)).To(BeTrue(),
-						"precondition-error-adapter should have Health=False")
-
-					healthCond := h.GetCondition(adapterStatus.Conditions, client.ConditionTypeHealth)
-					g.Expect(healthCond).NotTo(BeNil(), "Health condition should exist")
-					g.Expect(healthCond.Reason).NotTo(BeNil(), "Health condition reason should not be nil")
-					g.Expect(*healthCond.Reason).NotTo(BeEmpty(), "Health condition reason should not be empty")
-					g.Expect(healthCond.Message).NotTo(BeNil(), "Health condition message should not be nil")
-					g.Expect(*healthCond.Message).NotTo(BeEmpty(), "Health condition message should not be empty")
-
-					ginkgo.GinkgoWriter.Printf("Verified adapter failure: Applied=False, Available=False, Health=False (reason=%s)\n",
-						*healthCond.Reason)
-				}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
-
-				// Step 4: Verify non-required adapter failure does not block cluster reconciliation
-				ginkgo.By("Verify cluster reconciles normally despite non-required adapter failure")
+				// Step 3: Verify non-required adapter failure does not block cluster reconciliation
+				ginkgo.By("Verify cluster reconciles normally despite non-required adapter param extraction failure")
 				// cl-precondition-error is a non-required adapter. Per ADR-0008, aggregated
 				// conditions (Reconciled, LastKnownReconciled) evaluate only required adapters,
 				// so this adapter's failure does NOT prevent reconciliation. Verify the cluster
@@ -175,7 +132,23 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 						"cluster LastKnownReconciled should become True despite non-required adapter failure")
 				}, h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).Should(Succeed())
 
-				ginkgo.GinkgoWriter.Printf("Verified cluster reconciled despite non-required adapter failure: Reconciled=True, LastKnownReconciled=True\n")
+				// Step 4: Verify adapter status is absent — param extraction failure causes early return
+				// in the executor (before post_actions), so no status is ever reported to the API.
+				ginkgo.By("Verify adapter status is absent (param extraction failure prevents status reporting)")
+				statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
+				Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
+
+				var adapterStatus *openapi.AdapterStatus
+				for i, status := range statuses.Items {
+					if status.Adapter == adapterName {
+						adapterStatus = &statuses.Items[i]
+						break
+					}
+				}
+				Expect(adapterStatus).To(BeNil(),
+					"adapter with param extraction failure should not report status (post_actions never execute)")
+
+				ginkgo.GinkgoWriter.Printf("Verified: adapter status absent (param failure), cluster reconciled normally\n")
 			})
 	},
 )
