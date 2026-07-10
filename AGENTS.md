@@ -14,7 +14,7 @@ Run `make check` before declaring work done. It runs everything in order:
 | `make build` | `generate` → compile binary to `bin/hyperfleet-e2e` |
 | `make fmt` | Format code and imports (`golangci-lint fmt`) |
 | `make test` | Unit tests only (`./pkg/...`) |
-| `make lint` | `golangci-lint` (config: `.golangci.yml`) |
+| `make lint` | `golangci-lint` (pinned in `tools/go.mod`, config: `.golangci.yml`) |
 | `make generate` | No-op (reserved for future code generation) |
 
 Pre-flight order: `make check` then `make build`.

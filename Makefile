@@ -1,9 +1,9 @@
-include .bingo/Variables.mk
-
 .DEFAULT_GOAL := help
 
 GO ?= go
 GOFMT ?= gofmt
+TOOL_MOD := tools/go.mod
+gotool = $(GO) tool -modfile=$(TOOL_MOD) $(1)
 
 # Binary output directory and name
 BIN_DIR := bin
@@ -87,9 +87,9 @@ e2e: build ## Run all E2E tests
 PROCS ?= 4
 
 .PHONY: e2e-ci
-e2e-ci: $(GINKGO) ## Run E2E tests with CI configuration (parallel via ginkgo CLI)
+e2e-ci: ## Run E2E tests with CI configuration (parallel via ginkgo CLI)
 	mkdir -p $(OUTPUT_DIR)
-	TESTDATA_DIR=$(PWD)/testdata $(GINKGO) \
+	TESTDATA_DIR=$(PWD)/testdata $(call gotool,ginkgo) \
 		--procs=$(PROCS) \
 		--flake-attempts=$(FLAKE_ATTEMPTS) \
 		--junit-report=junit.xml \
@@ -129,14 +129,22 @@ vet: generate ## Run go vet
 	$(GO) vet ./...
 
 .PHONY: lint
-lint: generate $(GOLANGCI_LINT) ## Run golangci-lint
-	$(GOLANGCI_LINT) run
+lint: ## Run golangci-lint
+	$(call gotool,golangci-lint) run ./...
+
+.PHONY: tools
+tools: ## Ensure tool dependencies are up to date
+	cd tools && GOWORK=off $(GO) mod tidy
+
+.PHONY: verify-tools
+verify-tools: tools ## Fail in CI if tool module drifted
+	@git diff --exit-code tools/go.mod tools/go.sum || (echo "tool modules out of date; run 'make tools'" && exit 1)
 
 .PHONY: verify
 verify: generate fmt-check vet ## Run all verification checks
 
 .PHONY: check
-check: verify lint test ## Run all checks (fmt, vet, lint, test)
+check: verify lint test verify-tools ## Run all checks (fmt, vet, lint, test, tools)
 
 ##@ Container Images
 
