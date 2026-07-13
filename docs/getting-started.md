@@ -38,7 +38,19 @@ export MAESTRO_URL=<your-maestro-url>
 export NAMESPACE=<your-deployment-namespace>
 ```
 
-**Step 2**: Run tier0 tests
+**Step 2**: Configure JWT authentication (optional)
+
+When the API has JWT enforcement enabled (`server.jwt.enabled=true`), the E2E framework must authenticate requests. It acquires a JWT from K8s using the TokenRequest API — the test runner needs cluster credentials with `serviceaccounts/token` create permission.
+
+```bash
+export HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME=hyperfleet-e2e-sa
+export HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE=hyperfleet
+export HYPERFLEET_IDENTITY_EXPECTEDIDENTITY=system:serviceaccount:hyperfleet:hyperfleet-e2e-sa
+```
+
+Skip this step if JWT is not enabled — the framework works without authentication.
+
+**Step 3**: Run tier0 tests
 
 ```bash
 ./bin/hyperfleet-e2e test --label-filter=tier0

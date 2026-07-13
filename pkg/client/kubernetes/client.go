@@ -7,6 +7,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -370,4 +371,21 @@ func HasDeploymentCondition(deploy *appsv1.Deployment, condType appsv1.Deploymen
 		}
 	}
 	return false
+}
+
+// CreateToken requests a token for a service account using the TokenRequest API
+func (c *Client) CreateToken(ctx context.Context, namespace, serviceAccountName, audience string, expirationSeconds int64) (string, error) {
+	tokenRequest := &authenticationv1.TokenRequest{
+		Spec: authenticationv1.TokenRequestSpec{
+			Audiences:         []string{audience},
+			ExpirationSeconds: &expirationSeconds,
+		},
+	}
+
+	tokenResp, err := c.CoreV1().ServiceAccounts(namespace).CreateToken(ctx, serviceAccountName, tokenRequest, metav1.CreateOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to create token for service account %s/%s: %w", namespace, serviceAccountName, err)
+	}
+
+	return tokenResp.Status.Token, nil
 }

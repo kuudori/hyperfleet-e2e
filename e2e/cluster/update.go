@@ -51,6 +51,10 @@ var _ = ginkgo.Describe("[Suite: cluster][update] Cluster Update Lifecycle",
 			Expect(patchedCluster.Spec).To(HaveKey("dns"),
 				"PATCH response should reflect updated spec fields")
 
+			if expected := h.ExpectedIdentity(); expected != "" {
+				Expect(patchedCluster.UpdatedBy).To(Equal(expected), "updated_by should match configured identity after PATCH")
+			}
+
 			ginkgo.By("waiting for all adapters to reconcile at new generation")
 			Eventually(h.PollClusterAdapterStatuses(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
 				Should(helper.HaveAllAdaptersAtGeneration(h.Cfg.Adapters.Cluster, expectedGen))

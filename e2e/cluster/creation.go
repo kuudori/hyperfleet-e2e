@@ -36,6 +36,10 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
 					ginkgo.GinkgoWriter.Printf("Warning: failed to cleanup cluster %s: %v\n", clusterID, err)
 				}
 			})
+
+			if expected := h.ExpectedIdentity(); expected != "" {
+				Expect(cluster).To(helper.HaveAuditIdentity(expected))
+			}
 		})
 
 		ginkgo.Describe("Basic Workflow Validation", ginkgo.Label(labels.Tier0), func() {

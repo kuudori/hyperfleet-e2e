@@ -157,6 +157,53 @@ func (m *allAdaptersGenerationMatcher) NegatedFailureMessage(_ any) string {
 	return fmt.Sprintf("expected adapters NOT at generation %d", m.generation)
 }
 
+// HaveAuditIdentity matches a *Cluster or *Resource whose CreatedBy field equals the expected identity.
+func HaveAuditIdentity(expected string) types.GomegaMatcher {
+	return &auditIdentityMatcher{expected: expected}
+}
+
+type auditIdentityMatcher struct {
+	expected string
+	actual   string
+}
+
+func (m *auditIdentityMatcher) Match(actual any) (bool, error) {
+	identity, err := extractCreatedBy(actual)
+	if err != nil {
+		return false, err
+	}
+	m.actual = identity
+	return identity == m.expected, nil
+}
+
+func (m *auditIdentityMatcher) FailureMessage(_ any) string {
+	return fmt.Sprintf("expected created_by=%q but got %q", m.expected, m.actual)
+}
+
+func (m *auditIdentityMatcher) NegatedFailureMessage(_ any) string {
+	return fmt.Sprintf("expected created_by NOT to be %q", m.expected)
+}
+
+func extractCreatedBy(actual any) (string, error) {
+	switch v := actual.(type) {
+	case *openapi.Cluster:
+		if v == nil {
+			return "", fmt.Errorf("HaveAuditIdentity expects non-nil *Cluster")
+		}
+		return v.CreatedBy, nil
+	case *client.Resource:
+		if v == nil {
+			return "", fmt.Errorf("HaveAuditIdentity expects non-nil *Resource")
+		}
+		if v.CreatedBy == nil {
+			return "", nil
+		}
+		return *v.CreatedBy, nil
+	default:
+		return "", fmt.Errorf("HaveAuditIdentity expects *Cluster or *Resource, got %T", actual)
+	}
+}
+
 func hasAdapterCond(conditions []openapi.AdapterCondition, condType string, status openapi.AdapterConditionStatus) bool {
 	for _, c := range conditions {
 		if c.Type == condType && c.Status == status {

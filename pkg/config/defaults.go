@@ -57,6 +57,12 @@ const (
 
 	// DefaultLogOutput is the default log output
 	DefaultLogOutput = LogOutputStdout
+
+	// DefaultTokenRequestExpirationSeconds is the default lifetime for TokenRequest tokens (matches suite timeout)
+	DefaultTokenRequestExpirationSeconds int64 = 7200
+
+	// DefaultTokenRequestAudience is the default audience for TokenRequest tokens
+	DefaultTokenRequestAudience = "hyperfleet-api"
 )
 
 // Default required adapters for resource types

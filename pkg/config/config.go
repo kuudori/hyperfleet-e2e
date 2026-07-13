@@ -85,6 +85,36 @@ var Tests = struct {
 	FlakeAttempts:     "tests.flakeAttempts",
 }
 
+// Identity config keys
+var Identity = struct {
+	// ExpectedIdentity is the expected audit identity for test assertions
+	// (e.g. the email the API resolves from the JWT claim)
+	// Env: HYPERFLEET_IDENTITY_EXPECTEDIDENTITY
+	ExpectedIdentity string
+
+	// TokenRequestServiceAccountName is the K8s service account for TokenRequest
+	// Env: HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME
+	TokenRequestServiceAccountName string
+
+	// TokenRequestNamespace is the namespace of the service account
+	// Env: HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE
+	TokenRequestNamespace string
+
+	// TokenRequestAudience is the audience for the requested token
+	// Env: HYPERFLEET_IDENTITY_TOKENREQUEST_AUDIENCE
+	TokenRequestAudience string
+
+	// TokenRequestExpirationSeconds is the token lifetime in seconds
+	// Env: HYPERFLEET_IDENTITY_TOKENREQUEST_EXPIRATIONSECONDS
+	TokenRequestExpirationSeconds string
+}{
+	ExpectedIdentity:               "identity.expectedIdentity",
+	TokenRequestServiceAccountName: "identity.tokenRequest.serviceAccountName",
+	TokenRequestNamespace:          "identity.tokenRequest.namespace",
+	TokenRequestAudience:           "identity.tokenRequest.audience",
+	TokenRequestExpirationSeconds:  "identity.tokenRequest.expirationSeconds",
+}
+
 // Log config keys
 var Log = struct {
 	// Level is the minimum log level
@@ -128,6 +158,40 @@ type APIDeploymentConfig struct {
 	ChartPath string `yaml:"chartPath" mapstructure:"chartPath"`
 }
 
+// TokenRequestConfig contains configuration for K8s TokenRequest-based JWT acquisition.
+// When enabled (ServiceAccountName is set), a JWT is acquired via the K8s TokenRequest API
+// at helper creation time and used for API authentication.
+type TokenRequestConfig struct {
+	ServiceAccountName string `yaml:"serviceAccountName" mapstructure:"serviceAccountName"`
+	Namespace          string `yaml:"namespace" mapstructure:"namespace"`
+	Audience           string `yaml:"audience" mapstructure:"audience"`
+	ExpirationSeconds  int64  `yaml:"expirationSeconds" mapstructure:"expirationSeconds"`
+}
+
+// IsEnabled returns true when TokenRequest-based authentication is configured.
+func (t TokenRequestConfig) IsEnabled() bool {
+	return t.ServiceAccountName != ""
+}
+
+// IdentityConfig contains JWT authentication and audit identity configuration.
+// token is acquired via TokenRequest at runtime and injected as Authorization: Bearer.
+// ExpectedIdentity is used by test assertions to verify audit fields (created_by, deleted_by).
+type IdentityConfig struct {
+	token            string             // JWT bearer token (acquired via TokenRequest, not user-configurable)
+	ExpectedIdentity string             `yaml:"expectedIdentity" mapstructure:"expectedIdentity"` // Expected audit identity for assertions
+	TokenRequest     TokenRequestConfig `yaml:"tokenRequest" mapstructure:"tokenRequest"`         // K8s TokenRequest JWT acquisition
+}
+
+// Token returns the JWT bearer token.
+func (c *IdentityConfig) Token() string {
+	return c.token
+}
+
+// SetToken sets the JWT bearer token (called by TokenRequest acquisition).
+func (c *IdentityConfig) SetToken(t string) {
+	c.token = t
+}
+
 // Config represents the e2e test configuration
 type Config struct {
 	Namespace         string                  `yaml:"namespace" mapstructure:"namespace"`
@@ -143,6 +207,7 @@ type Config struct {
 	AdapterDeployment AdapterDeploymentConfig `yaml:"adapterDeployment" mapstructure:"adapterDeployment"`
 	APIDeployment     APIDeploymentConfig     `yaml:"apiDeployment" mapstructure:"apiDeployment"`
 	BrokerType        string                  `yaml:"brokerType" mapstructure:"brokerType"`
+	Identity          IdentityConfig          `yaml:"identity" mapstructure:"identity"`
 }
 
 // APIConfig contains API-related configuration
@@ -433,6 +498,16 @@ func (c *Config) applyDefaults() {
 	if c.APIDeployment.ChartPath == "" {
 		c.APIDeployment.ChartPath = os.Getenv("API_CHART_PATH")
 	}
+
+	// Apply tokenRequest defaults when enabled
+	if c.Identity.TokenRequest.IsEnabled() {
+		if c.Identity.TokenRequest.ExpirationSeconds == 0 {
+			c.Identity.TokenRequest.ExpirationSeconds = DefaultTokenRequestExpirationSeconds
+		}
+		if c.Identity.TokenRequest.Audience == "" {
+			c.Identity.TokenRequest.Audience = DefaultTokenRequestAudience
+		}
+	}
 }
 
 // Validate validates configuration with detailed error messages
@@ -483,6 +558,13 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("configuration validation failed: polling.interval must be a positive duration, got %v", c.Polling.Interval)
 	}
 
+	// Validate identity tokenRequest config
+	if c.Identity.TokenRequest.IsEnabled() {
+		if c.Identity.TokenRequest.Namespace == "" {
+			return fmt.Errorf("configuration validation failed: identity.tokenRequest.namespace is required when tokenRequest is enabled")
+		}
+	}
+
 	return nil
 }
 
@@ -515,6 +597,10 @@ func (c *Config) Display() {
 		"api_chart_repo", redactURL(c.APIDeployment.ChartRepo),
 		"api_chart_ref", valueOrNotSet(c.APIDeployment.ChartRef),
 		"api_chart_path", valueOrNotSet(c.APIDeployment.ChartPath),
+		"identity_expected", valueOrNotSet(c.Identity.ExpectedIdentity),
+		"identity_token_request_sa", valueOrNotSet(c.Identity.TokenRequest.ServiceAccountName),
+		"identity_token_request_ns", valueOrNotSet(c.Identity.TokenRequest.Namespace),
+		"identity_token_request_audience", valueOrNotSet(c.Identity.TokenRequest.Audience),
 	)
 }
 
