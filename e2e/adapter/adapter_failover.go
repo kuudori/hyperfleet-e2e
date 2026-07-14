@@ -49,8 +49,9 @@ var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework c
 
 			// Set up base deployment options with common fields
 			baseDeployOpts = helper.AdapterDeploymentOptions{
-				Namespace: h.Cfg.Namespace,
-				ChartPath: chartPath,
+				Namespace:    h.Cfg.Namespace,
+				ChartPath:    chartPath,
+				ResourceType: helper.ResourceTypeClusters,
 			}
 		})
 
@@ -85,6 +86,13 @@ var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework c
 						ginkgo.GinkgoWriter.Printf("Warning: failed to uninstall adapter %s: %v\n", releaseName, err)
 					} else {
 						ginkgo.GinkgoWriter.Printf("Successfully uninstalled adapter: %s\n", releaseName)
+					}
+
+					if h.Cfg.BrokerType == "googlepubsub" {
+						ginkgo.By("Clean up Pub/Sub subscription and dlq topic for adapter")
+						if err := h.DeletePubSubResourcesForAdapter(ctx, adapterName, deployOpts.ResourceType); err != nil {
+							ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription and dlq topic for adapter %s: %v\n", adapterName, err)
+						}
 					}
 				})
 				Expect(err).NotTo(HaveOccurred(), "failed to deploy test adapter")

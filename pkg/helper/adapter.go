@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	pubsubadmin "cloud.google.com/go/pubsub/v2/apiv1"
@@ -20,6 +21,38 @@ import (
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type AdapterDeployment struct {
+	ReleaseName  string
+	AdapterName  string
+	ResourceType string
+}
+
+type AdapterDeploymentList struct {
+	mu    sync.RWMutex
+	items []AdapterDeployment
+}
+
+func (l *AdapterDeploymentList) Add(deployment AdapterDeployment) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.items = append(l.items, deployment)
+}
+
+// Snapshot returns a thread-safe copy of all adapter deployments
+func (l *AdapterDeploymentList) Snapshot() []AdapterDeployment {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	snapshot := make([]AdapterDeployment, len(l.items))
+	copy(snapshot, l.items)
+	return snapshot
+}
+
+func InitAdapterDeploymentList() *AdapterDeploymentList {
+	return &AdapterDeploymentList{
+		items: make([]AdapterDeployment, 0),
+	}
+}
 
 // generateRandomString generates a random alphanumeric string of the specified length
 func generateRandomString(length int) string {
@@ -39,12 +72,13 @@ func generateRandomString(length int) string {
 
 // AdapterDeploymentOptions contains configuration for deploying an adapter via Helm
 type AdapterDeploymentOptions struct {
-	ReleaseName string
-	Namespace   string
-	ChartPath   string
-	AdapterName string
-	Timeout     time.Duration
-	SetValues   map[string]string // Additional Helm --set values
+	ReleaseName  string
+	Namespace    string
+	ChartPath    string
+	AdapterName  string
+	Timeout      time.Duration
+	SetValues    map[string]string // Additional Helm --set values
+	ResourceType string
 }
 
 // GenerateAdapterReleaseName generates a deterministic Helm release name for an adapter deployment.
@@ -230,6 +264,13 @@ func (h *Helper) DeployAdapter(ctx context.Context, opts AdapterDeploymentOption
 
 		return fmt.Errorf("helm upgrade failed: %w (output: %s)", err, string(output))
 	}
+
+	// Add adapter deployment to list for cleanup
+	h.AdapterDeploymentList.Add(AdapterDeployment{
+		ReleaseName:  releaseName,
+		AdapterName:  opts.AdapterName,
+		ResourceType: opts.ResourceType,
+	})
 
 	logger.Info("adapter deployed successfully",
 		"release_name", releaseName,
@@ -502,7 +543,7 @@ func (h *Helper) PurgeAdapterQueue(ctx context.Context, adapterName string) erro
 	switch brokerType {
 	case "googlepubsub":
 		subscriptionID := fmt.Sprintf("%s-clusters-%s", h.Cfg.Namespace, adapterName)
-		return h.DeletePubSubSubscription(ctx, subscriptionID)
+		return DeletePubSubSubscription(ctx, subscriptionID, h.Cfg.GCPProjectID)
 	case "rabbitmq":
 		return h.purgeRabbitMQQueue(ctx, adapterName)
 	default:
@@ -573,10 +614,35 @@ var newPubSubDeleteFunc = func(ctx context.Context, projectID, subID string) (fu
 	}, nil
 }
 
+// DeletePubSubResourcesForAdapter deletes Pub/Sub subscription and dlq topic for a given adapter.
+func (h *Helper) DeletePubSubResourcesForAdapter(ctx context.Context, adapterName string, resourceType string) error {
+	if h.Cfg.BrokerType != "googlepubsub" {
+		logger.Info("skipping Pub/Sub subscription and topic deletion for non-Google Pub/Sub adapter", "adapter", adapterName)
+		return nil
+	}
+
+	namespace := h.Cfg.Namespace
+	projectID := h.Cfg.GCPProjectID
+	subscriptionID := fmt.Sprintf("%s-%s-%s", namespace, resourceType, adapterName)
+	topicID := fmt.Sprintf("%s-%s-%s-dlq", namespace, resourceType, adapterName)
+
+	var errorList []string
+	if err := DeletePubSubSubscription(ctx, subscriptionID, projectID); err != nil {
+		errorList = append(errorList, subscriptionID)
+	}
+	if err := DeletePubSubTopic(ctx, topicID, projectID); err != nil {
+		errorList = append(errorList, topicID)
+	}
+	if len(errorList) > 0 {
+		return fmt.Errorf("failed to delete some Pub/Sub resources for adapter %s: %s", adapterName, strings.Join(errorList, ", "))
+	}
+	logger.Info("deleted Pub/Sub resources for adapter", "adapter", adapterName)
+	return nil
+}
+
 // DeletePubSubSubscription deletes a Google Pub/Sub subscription using the Go SDK.
 // If the subscription does not exist, it is treated as a no-op.
-func (h *Helper) DeletePubSubSubscription(ctx context.Context, subscriptionID string) error {
-	projectID := h.Cfg.GCPProjectID
+func DeletePubSubSubscription(ctx context.Context, subscriptionID string, projectID string) error {
 	if projectID == "" {
 		projectID = defaultGCPProjectID
 	}
@@ -604,6 +670,57 @@ func (h *Helper) DeletePubSubSubscription(ctx context.Context, subscriptionID st
 	}
 
 	logger.Info("Pub/Sub subscription deleted successfully", "subscription", subscriptionID)
+	return nil
+}
+
+var newPubSubTopicDeleteFunc = func(ctx context.Context, projectID, topicID string) (func(context.Context) error, func(), error) {
+	client, err := pubsubadmin.NewTopicAdminClient(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create Pub/Sub topic admin client: %w", err)
+	}
+	topicPath := fmt.Sprintf("projects/%s/topics/%s", projectID, topicID)
+	deleteFn := func(ctx context.Context) error {
+		return client.DeleteTopic(ctx, &pubsubpb.DeleteTopicRequest{
+			Topic: topicPath,
+		})
+	}
+	return deleteFn, func() {
+		if err := client.Close(); err != nil {
+			logger.Info("failed to close Pub/Sub topic admin client", "error", err)
+		}
+	}, nil
+}
+
+// DeletePubSubTopic deletes a Google Pub/Sub topic using the Go SDK.
+// If the topic does not exist, it is treated as a no-op.
+func DeletePubSubTopic(ctx context.Context, topicID string, projectID string) error {
+	if projectID == "" {
+		projectID = defaultGCPProjectID
+	}
+
+	logger.Info("deleting Pub/Sub topic",
+		"topic", topicID,
+		"project", projectID)
+
+	deleteFn, cleanup, err := newPubSubTopicDeleteFunc(ctx, projectID, topicID)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if err := deleteFn(ctx); err != nil {
+		if status.Code(err) == codes.NotFound {
+			logger.Info("Pub/Sub topic not found, skipping deletion", "topic", topicID)
+			return nil
+		}
+		logger.Error("failed to delete Pub/Sub topic",
+			"topic", topicID,
+			"project", projectID,
+			"error", err)
+		return fmt.Errorf("failed to delete Pub/Sub topic %s: %w", topicID, err)
+	}
+
+	logger.Info("Pub/Sub topic deleted successfully", "topic", topicID)
 	return nil
 }
 

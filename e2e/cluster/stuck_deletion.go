@@ -66,8 +66,9 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 			})
 
 			baseDeployOpts = helper.AdapterDeploymentOptions{
-				Namespace: h.Cfg.Namespace,
-				ChartPath: adapterChartPath,
+				Namespace:    h.Cfg.Namespace,
+				ChartPath:    adapterChartPath,
+				ResourceType: helper.ResourceTypeClusters,
 			}
 		})
 
@@ -94,11 +95,11 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 					if err := h.UninstallAdapter(ctx, releaseName, h.Cfg.Namespace); err != nil {
 						ginkgo.GinkgoWriter.Printf("Warning: failed to uninstall adapter %s: %v\n", releaseName, err)
 					}
-
-					ginkgo.By("Clean up Pub/Sub subscription")
-					subscriptionID := h.Cfg.Namespace + "-" + helper.ResourceTypeClusters + "-" + adapterName
-					if err := h.DeletePubSubSubscription(ctx, subscriptionID); err != nil {
-						ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription %s: %v\n", subscriptionID, err)
+					if h.Cfg.BrokerType == "googlepubsub" {
+						ginkgo.By("Clean up Pub/Sub subscription and dlq topic for adapter")
+						if err := h.DeletePubSubResourcesForAdapter(ctx, adapterName, deployOpts.ResourceType); err != nil {
+							ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription and dlq topic for adapter %s: %v\n", adapterName, err)
+						}
 					}
 				})
 				Expect(err).NotTo(HaveOccurred(), "failed to deploy stuck-adapter")
