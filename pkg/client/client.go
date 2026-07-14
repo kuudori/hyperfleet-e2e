@@ -20,12 +20,13 @@ type HyperFleetClient struct {
 }
 
 // NewHyperFleetClient creates a new HyperFleet API client.
-func NewHyperFleetClient(baseURL string, httpClient *http.Client) (*HyperFleetClient, error) {
+func NewHyperFleetClient(baseURL string, httpClient *http.Client, opts ...openapi.ClientOption) (*HyperFleetClient, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	client, err := openapi.NewClient(baseURL, openapi.WithHTTPClient(httpClient))
+	clientOpts := append([]openapi.ClientOption{openapi.WithHTTPClient(httpClient)}, opts...)
+	client, err := openapi.NewClient(baseURL, clientOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}

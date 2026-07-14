@@ -53,6 +53,11 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Cluster Deletion Lifecycle",
 			Expect(deletedCluster.DeletedTime).NotTo(BeNil(), "soft-deleted cluster should have deleted_time set")
 			Expect(deletedCluster.Generation).To(Equal(clusterBefore.Generation+1), "generation should increment after soft-delete")
 
+			if expected := h.ExpectedIdentity(); expected != "" {
+				Expect(deletedCluster.DeletedBy).NotTo(BeNil(), "deleted_by should be set on soft-delete")
+				Expect(*deletedCluster.DeletedBy).To(Equal(expected), "deleted_by should match configured identity")
+			}
+
 			ginkgo.By("waiting for cluster adapters to finalize and cluster to be hard-deleted")
 			// Hard-delete executes atomically within the POST /adapter_statuses request that
 			// computes Reconciled=True, so there is no observable window to see Finalized=True

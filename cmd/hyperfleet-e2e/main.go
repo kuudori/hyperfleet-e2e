@@ -30,7 +30,6 @@ func init() {
 	pfs.StringVar(&logLevel, "log-level", config.DefaultLogLevel, "Log level (debug, info, warn, error)")
 	pfs.StringVar(&logFormat, "log-format", config.DefaultLogFormat, "Log format (text, json)")
 	pfs.StringVar(&logOutput, "log-output", config.DefaultLogOutput, "Log output (stdout, stderr)")
-
 	// Flags are bound in subcommand run() after config loading (osde2e pattern)
 
 	root.AddCommand(test.Cmd)

@@ -44,6 +44,7 @@ Pre-flight order: `make check` then `make build`.
 | Labels | `pkg/labels/labels.go` |
 | Condition type constants | `pkg/client/constants.go` |
 | Config file | `configs/config.yaml` |
+| Identity config & transport | `pkg/config/config.go` (`IdentityConfig`), `pkg/helper/suite.go` (RequestEditorFn wiring) |
 
 ## Test Conventions
 
@@ -88,7 +89,7 @@ Eventually(h.PollNamespacesByPrefix(ctx, clusterID), timeout, h.Cfg.Polling.Inte
 
 Available pollers: `PollCluster`, `PollNodePool`, `PollClusterAdapterStatuses`, `PollNodePoolAdapterStatuses`, `PollClusterHTTPStatus`, `PollNodePoolHTTPStatus`, `PollNamespacesByPrefix`.
 
-Available matchers: `HaveResourceCondition`, `HaveAllAdaptersWithCondition`, `HaveAllAdaptersAtGeneration`.
+Available matchers: `HaveResourceCondition`, `HaveAllAdaptersWithCondition`, `HaveAllAdaptersAtGeneration`, `HaveAuditIdentity`.
 
 For one-off complex assertions, use `Eventually(func(g Gomega) { ... }).Should(Succeed())` with `g.Expect()` (not bare `Expect()`).
 
@@ -119,6 +120,38 @@ Use `ginkgo.By()` for major steps. **IMPORTANT:** Never use `ginkgo.By()` inside
 
 Always use config values: `h.Cfg.Timeouts.Cluster.Reconciled`, `h.Cfg.Timeouts.NodePool.Reconciled`, `h.Cfg.Timeouts.Adapter.Processing`, `h.Cfg.Polling.Interval`. Never hardcode durations.
 
+### JWT authentication (caller identity)
+
+When `server.jwt.enabled=true`, the API authenticates requests via JWT. The E2E framework acquires a token from K8s using the TokenRequest API — no static tokens or secrets to manage.
+
+```yaml
+# configs/config.yaml
+identity:
+  expectedIdentity: "system:serviceaccount:hyperfleet:hyperfleet-e2e-sa"
+  tokenRequest:
+    serviceAccountName: "hyperfleet-e2e-sa"
+    namespace: "hyperfleet"
+```
+
+Or via env vars:
+```bash
+HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME=hyperfleet-e2e-sa \
+HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE=hyperfleet \
+HYPERFLEET_IDENTITY_EXPECTEDIDENTITY=system:serviceaccount:hyperfleet:hyperfleet-e2e-sa \
+./bin/hyperfleet-e2e test
+```
+
+The acquired token is injected as `Authorization: Bearer` on every API request via `openapi.WithRequestEditorFn`.
+
+The `expectedIdentity` field is the audit identity the API resolves from the JWT claim. It's used by test assertions to verify `created_by` / `deleted_by` fields:
+
+```go
+if expected := h.ExpectedIdentity(); expected != "" {
+    Expect(cluster).To(helper.HaveAuditIdentity(expected))
+}
+```
+
+When `expectedIdentity` is empty, audit assertions are skipped.
 ## Boundaries
 
 ### DON'T
@@ -137,3 +170,4 @@ Always use config values: `h.Cfg.Timeouts.Cluster.Reconciled`, `h.Cfg.Timeouts.N
 - Config file path priority: `--config` flag > `HYPERFLEET_CONFIG` env > `./configs/config.yaml` auto-detect
 - Adapter names come from `h.Cfg.Adapters.Cluster` and `h.Cfg.Adapters.NodePool` at runtime — never hardcode adapter names. Values in `configs/config.yaml` (e.g., `cl-namespace`) override compiled defaults in `pkg/config/defaults.go` (e.g., `clusters-namespace`)
 - `e2e-ci` Makefile target sets `TESTDATA_DIR` to absolute path and writes JUnit XML to `output/`
+- JWT auth is required when the API has `server.jwt.enabled=true` (production default). Set `identity.tokenRequest.serviceAccountName` and `.namespace` — the framework acquires a token via the K8s TokenRequest API at startup.

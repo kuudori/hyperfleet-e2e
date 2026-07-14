@@ -183,6 +183,12 @@ func (h *Helper) CleanupTestWifConfig(ctx context.Context, wifConfigID string) e
 	return nil
 }
 
+// ExpectedIdentity returns the configured expected audit identity value.
+// Returns empty string if not configured, signalling callers to skip audit assertions.
+func (h *Helper) ExpectedIdentity() string {
+	return h.Cfg.Identity.ExpectedIdentity
+}
+
 // GetMaestroClient returns the Maestro client, initializing it lazily on first access
 // This avoids the overhead of K8s service discovery for test suites that don't use Maestro
 func (h *Helper) GetMaestroClient() *maestro.Client {

@@ -118,3 +118,34 @@ adapters:
   #   - API_ADAPTERS_NODEPOOL
   nodepool:
     - "np-configmap"
+
+# ============================================================================
+# JWT Authentication Configuration
+# ============================================================================
+
+identity:
+  # Expected audit identity for test assertions.
+  # For K8s SA tokens with identity_claim=sub, format is "system:serviceaccount:<ns>:<sa>".
+  # The API resolves caller identity from the JWT claim — this field tells
+  # the E2E framework what value to expect in created_by / deleted_by fields.
+  # Can be overridden by: HYPERFLEET_IDENTITY_EXPECTEDIDENTITY
+  expectedIdentity: ""
+
+  # Token Request Configuration (K8s TokenRequest API)
+  # When enabled (serviceAccountName is set), the E2E framework acquires
+  # a JWT from the K8s cluster at startup using the TokenRequest API.
+  # This is the recommended auth method for JWT-enabled API deployments.
+  #
+  # Required: serviceAccountName and namespace
+  # The SA must exist in the target namespace before tests run.
+  #
+  # Can be overridden by environment variables:
+  #   HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME
+  #   HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE
+  #   HYPERFLEET_IDENTITY_TOKENREQUEST_AUDIENCE
+  #   HYPERFLEET_IDENTITY_TOKENREQUEST_EXPIRATIONSECONDS
+  tokenRequest:
+    serviceAccountName: ""
+    namespace: ""
+    audience: "hyperfleet-api"
+    expirationSeconds: 3600

@@ -1,9 +1,12 @@
 package helper
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"sync"
 
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	k8sclient "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
@@ -61,14 +64,43 @@ func New() *Helper {
 		log.Fatalf("Adapter deployment list not initialized")
 	}
 
-	cl, err := client.NewHyperFleetClient(cfg.API.URL, nil)
-	if err != nil {
-		log.Fatalf("Failed to create HyperFleet client: %v", err)
-	}
-
 	k8sClient, err := k8sclient.NewClient()
 	if err != nil {
 		log.Fatalf("Failed to create K8s client: %v", err)
+	}
+
+	// Acquire JWT via K8s TokenRequest API if configured
+	if cfg.Identity.TokenRequest.IsEnabled() {
+		token, err := k8sClient.CreateToken(
+			context.Background(),
+			cfg.Identity.TokenRequest.Namespace,
+			cfg.Identity.TokenRequest.ServiceAccountName,
+			cfg.Identity.TokenRequest.Audience,
+			cfg.Identity.TokenRequest.ExpirationSeconds,
+		)
+		if err != nil {
+			log.Fatalf("Failed to acquire JWT via TokenRequest: %v", err)
+		}
+		cfg.Identity.SetToken(token)
+		log.Printf("Acquired JWT for SA %s/%s (audience: %s, expires: %ds)",
+			cfg.Identity.TokenRequest.Namespace,
+			cfg.Identity.TokenRequest.ServiceAccountName,
+			cfg.Identity.TokenRequest.Audience,
+			cfg.Identity.TokenRequest.ExpirationSeconds)
+	}
+
+	var opts []openapi.ClientOption
+	if token := cfg.Identity.Token(); token != "" {
+		opts = append(opts, openapi.WithRequestEditorFn(
+			func(_ context.Context, req *http.Request) error {
+				req.Header.Set("Authorization", "Bearer "+token)
+				return nil
+			}))
+	}
+
+	cl, err := client.NewHyperFleetClient(cfg.API.URL, nil, opts...)
+	if err != nil {
+		log.Fatalf("Failed to create HyperFleet client: %v", err)
 	}
 
 	return &Helper{
