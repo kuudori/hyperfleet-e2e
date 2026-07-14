@@ -20,6 +20,7 @@ broker:
     deadLetterTopic: ${NAMESPACE}-clusters-dlq
     createTopicIfMissing: ${ADAPTER_GOOGLEPUBSUB_CREATE_TOPIC_IF_MISSING}
     createSubscriptionIfMissing: ${ADAPTER_GOOGLEPUBSUB_CREATE_SUBSCRIPTION_IF_MISSING}
+    expirationTTL: "1d"
   rabbitmq:
     url: ${RABBITMQ_URL}
     queue: ${NAMESPACE}-clusters-${ADAPTER_NAME}
