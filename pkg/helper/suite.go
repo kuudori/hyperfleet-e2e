@@ -1,7 +1,6 @@
 package helper
 
 import (
-	"context"
 	"log"
 	"sync"
 
@@ -65,26 +64,6 @@ func New() *Helper {
 	k8sClient, err := k8sclient.NewClient()
 	if err != nil {
 		log.Fatalf("Failed to create K8s client: %v", err)
-	}
-
-	// Acquire JWT via K8s TokenRequest API if configured
-	if cfg.Identity.TokenRequest.IsEnabled() {
-		token, err := k8sClient.CreateToken(
-			context.Background(),
-			cfg.Identity.TokenRequest.Namespace,
-			cfg.Identity.TokenRequest.ServiceAccountName,
-			cfg.Identity.TokenRequest.Audience,
-			cfg.Identity.TokenRequest.ExpirationSeconds,
-		)
-		if err != nil {
-			log.Fatalf("Failed to acquire JWT via TokenRequest: %v", err)
-		}
-		cfg.Identity.SetToken(token)
-		log.Printf("Acquired JWT for SA %s/%s (audience: %s, expires: %ds)",
-			cfg.Identity.TokenRequest.Namespace,
-			cfg.Identity.TokenRequest.ServiceAccountName,
-			cfg.Identity.TokenRequest.Audience,
-			cfg.Identity.TokenRequest.ExpirationSeconds)
 	}
 
 	var opts []client.ClientOption
