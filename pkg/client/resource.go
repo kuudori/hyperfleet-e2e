@@ -128,5 +128,11 @@ func (c *HyperFleetClient) doJSON(ctx context.Context, method, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	for _, editor := range c.RequestEditors {
+		if err := editor(ctx, req); err != nil {
+			return nil, fmt.Errorf("apply request editor: %w", err)
+		}
+	}
+
 	return c.httpClient.Do(req)
 }
