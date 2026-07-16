@@ -72,7 +72,6 @@ hyperfleet-e2e/
 │   └── config.yaml   - Default configuration
 ├── docs/             - Documentation
 ├── env/              - Environment configuration files
-├── hack/             - Build and development scripts
 ├── images/           - Container image definitions
 └── scripts/          - Utility scripts
 ```

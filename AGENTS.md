@@ -1,6 +1,6 @@
 # HyperFleet E2E — Agent Instructions
 
-Black-box E2E testing framework for HyperFleet cluster lifecycle management. Tests hit the HyperFleet API, create ephemeral clusters, verify adapter execution and K8s resource creation, then clean up. Built with Go 1.25, Ginkgo v2, Gomega, and an OpenAPI-generated client.
+Black-box E2E testing framework for HyperFleet cluster lifecycle management. Tests hit the HyperFleet API, create ephemeral clusters, verify adapter execution and K8s resource creation, then clean up. Built with Go 1.25, Ginkgo v2, Gomega, and a generic HTTP client.
 
 Test suites: `e2e/cluster/`, `e2e/nodepool/`, `e2e/adapter/`.
 
@@ -10,12 +10,11 @@ Run `make check` before declaring work done. It runs everything in order:
 
 | Target | What it does |
 |---|---|
-| `make check` | `generate` → `fmt-check` → `vet` → `lint` → `test` (all-in-one) |
-| `make build` | `generate` → compile binary to `bin/hyperfleet-e2e` |
+| `make check` | `fmt-check` → `vet` → `lint` → `test` (all-in-one) |
+| `make build` | Compile binary to `bin/hyperfleet-e2e` |
 | `make fmt` | Format code and imports (`golangci-lint fmt`) |
 | `make test` | Unit tests only (`./pkg/...`) |
 | `make lint` | `golangci-lint` (config: `.golangci.yml`) |
-| `make generate` | Regenerate OpenAPI client from spec |
 
 Pre-flight order: `make check` then `make build`.
 

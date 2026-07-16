@@ -66,13 +66,13 @@ hyperfleet-e2e/
 ├── cmd/              - CLI entry point
 │   └── hyperfleet-e2e/
 ├── pkg/              - Core packages
-│   ├── api/          - OpenAPI generated client
-│   ├── client/       - HyperFleet API client wrapper
+│   ├── client/       - HyperFleet API client (generic HTTP)
 │   ├── config/       - Configuration loading and validation
 │   ├── e2e/          - Test execution engine (Ginkgo)
 │   ├── helper/       - Test helper utilities
 │   ├── labels/       - Test label definitions
-│   └── logger/       - Structured logging (slog)
+│   ├── logger/       - Structured logging (slog)
+│   └── util/         - Pointer and utility helpers
 ├── e2e/              - Test suites
 │   ├── adapter/      - Adapter lifecycle tests
 │   ├── channel/      - Channel management tests
@@ -92,9 +92,7 @@ hyperfleet-e2e/
 │   └── config.yaml   - Default configuration
 ├── docs/             - Documentation
 ├── env/              - Environment configuration files
-├── hack/             - Build and development scripts
 ├── images/           - Container image definitions
-├── openapi/          - OpenAPI spec and generation config
 └── scripts/          - Utility scripts
 ```
 
