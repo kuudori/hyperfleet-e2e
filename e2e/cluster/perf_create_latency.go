@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
@@ -40,7 +39,7 @@ var _ = ginkgo.Describe("[Suite: cluster][perf] Create-to-reconciled latency",
 			})
 
 			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 			elapsed := time.Since(start)
 			ginkgo.GinkgoWriter.Printf("[PERF] Cluster create-to-reconciled latency: %v\n", elapsed)

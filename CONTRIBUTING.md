@@ -24,19 +24,14 @@ Thank you for contributing to HyperFleet E2E! This document provides guidelines 
    git remote add upstream https://github.com/openshift-hyperfleet/hyperfleet-e2e.git
    ```
 
-3. Install dependencies and generate code:
+3. Run checks:
    ```bash
-   make generate
+   make check
    ```
 
 4. Build the binary:
    ```bash
    make build
-   ```
-
-5. Verify your setup:
-   ```bash
-   make check
    ```
 
 ## Repository Structure
@@ -46,13 +41,13 @@ hyperfleet-e2e/
 ├── cmd/              - CLI entry point
 │   └── hyperfleet-e2e/
 ├── pkg/              - Core packages
-│   ├── api/          - OpenAPI generated client
-│   ├── client/       - HyperFleet API client wrapper
+│   ├── client/       - HyperFleet API client (generic HTTP)
 │   ├── config/       - Configuration loading and validation
 │   ├── e2e/          - Test execution engine (Ginkgo)
 │   ├── helper/       - Test helper utilities
 │   ├── labels/       - Test label definitions
-│   └── logger/       - Structured logging (slog)
+│   ├── logger/       - Structured logging (slog)
+│   └── util/         - Pointer and utility helpers
 ├── e2e/              - Test suites
 │   ├── adapter/      - Adapter lifecycle tests
 │   ├── channel/      - Channel management tests
@@ -74,7 +69,6 @@ hyperfleet-e2e/
 ├── env/              - Environment configuration files
 ├── hack/             - Build and development scripts
 ├── images/           - Container image definitions
-├── openapi/          - OpenAPI spec and generation config
 └── scripts/          - Utility scripts
 ```
 
@@ -129,19 +123,8 @@ Key points:
 
 ## Common Tasks
 
-### Update API Client
-
-When the HyperFleet API OpenAPI schema changes:
-
-```bash
-# 1. Bump the spec module version in go.mod
-go get github.com/openshift-hyperfleet/hyperfleet-api-spec@vX.Y.Z
-
-# 2. Regenerate client code from the new spec
-make generate
-```
-
 ### Build and Test Workflow
+
 
 Standard development workflow:
 

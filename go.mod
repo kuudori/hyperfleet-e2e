@@ -5,14 +5,12 @@ go 1.25.0
 require (
 	cloud.google.com/go/pubsub/v2 v2.6.0
 	github.com/google/uuid v1.6.0
-	github.com/oapi-codegen/runtime v1.4.2
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/openshift-hyperfleet/hyperfleet-api-spec v1.0.26
-	github.com/samber/lo v1.53.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	google.golang.org/grpc v1.80.0
+	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.21.0
 	k8s.io/api v0.35.1
 	k8s.io/apimachinery v0.35.1
@@ -32,7 +30,6 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
-	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -137,7 +134,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.35.1 // indirect
 	k8s.io/apiserver v0.35.1 // indirect
 	k8s.io/cli-runtime v0.35.1 // indirect

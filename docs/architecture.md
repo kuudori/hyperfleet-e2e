@@ -7,14 +7,13 @@ HyperFleet E2E is a Ginkgo-based black-box testing framework for validating Hype
 1. **Ephemeral resource management** - Tests create and cleanup temporary resources
 2. **Configuration-driven execution** - Behavior controlled through config files, env vars, and CLI flags
 3. **Structured logging** - All operations tracked with component, cluster ID, and error context
-4. **OpenAPI client generation** - Type-safe API client auto-generated from HyperFleet OpenAPI spec
+4. **Generic HTTP client** - Type-safe API client using hand-written types matching the generic resource API contract
 
 ## Core Packages
 
 ```text
 pkg/
-├── api/                - OpenAPI generated client
-├── client/             - HyperFleet API client wrapper
+├── client/             - HyperFleet API client (generic HTTP)
 │   ├── kubernetes/     - Kubernetes client (client-go)
 │   └── maestro/        - Maestro resource bundle client
 ├── config/             - Configuration loading and validation
@@ -85,17 +84,18 @@ Built-in Defaults (lowest priority)
 
 ### pkg/client
 
-**Purpose**: Wrapper around generated OpenAPI client with test-friendly methods
+**Purpose**: Generic HTTP client for the HyperFleet API with test-friendly methods
 
 **Key Features**:
 - Generic HTTP response handler
 - Structured error handling
-- Convenience methods for common operations
-- Direct access to underlying OpenAPI client
+- Convenience methods for common operations (cluster, nodepool, channel, version, wifconfig)
+- Auth injection via `http.RoundTripper`
 
 **Key Types**:
-- `HyperFleetClient` - Main client interface
-- Wraps generated OpenAPI `Client` from `pkg/api/openapi`
+- `HyperFleetClient` - Main client struct
+- `Resource` / `ResourceList` - Generic resource types matching the API contract
+- `AdapterStatus` / `AdapterStatusList` - Adapter status types
 
 **Key Methods**:
 
@@ -138,8 +138,8 @@ Built-in Defaults (lowest priority)
 - `GetTestNodePool(ctx, clusterID, payloadPath)` - Create nodepool
 
 *Pollers* (`pollers.go`) — thin functions returning current state for use with `Eventually`:
-- `PollCluster(ctx, id)` - Returns `(*Cluster, error)`
-- `PollNodePool(ctx, clusterID, npID)` - Returns `(*NodePool, error)`
+- `PollCluster(ctx, id)` - Returns `(*Resource, error)`
+- `PollNodePool(ctx, clusterID, npID)` - Returns `(*Resource, error)`
 - `PollClusterAdapterStatuses(ctx, clusterID)` - Returns `(*AdapterStatusList, error)`
 - `PollNodePoolAdapterStatuses(ctx, clusterID, npID)` - Returns `(*AdapterStatusList, error)`
 - `PollClusterHTTPStatus(ctx, id)` - Returns HTTP status code (200/404)
@@ -147,7 +147,7 @@ Built-in Defaults (lowest priority)
 - `PollNamespacesByPrefix(ctx, prefix)` - Returns `([]string, error)`
 
 *Custom Matchers* (`matchers.go`) — reusable Gomega matchers:
-- `HaveResourceCondition(condType, status)` - Matches `*Cluster` or `*NodePool` with given condition
+- `HaveResourceCondition(condType, status)` - Matches `*Resource` with given condition
 - `HaveAllAdaptersWithCondition(adapters, condType, status)` - All required adapters have condition
 - `HaveAllAdaptersAtGeneration(adapters, gen)` - All adapters at generation with Applied/Available/Health=True
 
@@ -273,37 +273,23 @@ CLI Invoked (hyperfleet-e2e test)
 └─────────────────────────────────────┘
 ```
 
-## OpenAPI Integration
+## API Client Design
 
-The framework uses code generation to maintain type-safe API clients.
+The framework uses hand-written Go types (`Resource`, `AdapterStatus`, `ResourceCondition`, etc.) that mirror the generic resource API contract. With the migration to the generic resource layer, the API uses a single `Resource` type with `map[string]any` spec for all entities (clusters, nodepools, channels, versions, wifconfigs).
 
-### Client Generation
+### Client Architecture
 
-- **Source**: HyperFleet OpenAPI specification (YAML/JSON)
-- **Generator**: oapi-codegen (Go client)
-- **Output**: `pkg/api/openapi/` package
-- **Regeneration**: `make generate` (when API spec changes)
-
-### Generated Client Usage
-
-The generated client is wrapped by `pkg/client.HyperFleetClient` to provide:
-- Simplified error handling
-- Test-friendly method signatures
-- Request/response logging
+- **Types**: Defined in `pkg/client/resource.go` - `Resource`, `ResourceCondition`, `AdapterStatus`, etc.
+- **Generic CRUD**: `CreateResource`, `GetResource`, `ListResources`, `PatchResource`, `DeleteResource`
+- **Entity convenience methods**: `GetCluster`, `CreateNodePool`, etc. delegate to generic CRUD with entity-specific paths
+- **Auth**: `WithBearerToken` option wraps `http.RoundTripper` to inject JWT on all requests
 
 **Example**:
 ```go
-// Wrapped client (test-friendly) — used in tests
-client, _ := client.NewHyperFleetClient(apiURL, nil)
-cluster, err := client.GetCluster(ctx, clusterID)
+// Create client with JWT auth
+cl, err := client.NewHyperFleetClient(apiURL, nil, client.WithBearerToken(token))
+if err != nil {
+    log.Fatalf("create client: %v", err)
+}
+cluster, err := cl.GetCluster(ctx, clusterID)
 ```
-
-### OpenAPI Spec Location
-
-The OpenAPI specification is typically maintained in the main HyperFleet repository and referenced during code generation. Updates to the API require regenerating the client:
-
-```bash
-make generate
-```
-
-This ensures the test framework stays in sync with API changes.

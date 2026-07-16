@@ -3,16 +3,16 @@ package helper
 import (
 	"strings"
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 )
 
 // HasAdapterCondition checks if an adapter condition with the given type and status exists in the conditions list
-func (h *Helper) HasAdapterCondition(conditions []openapi.AdapterCondition, condType string, status openapi.AdapterConditionStatus) bool {
+func (h *Helper) HasAdapterCondition(conditions []client.AdapterCondition, condType string, status client.AdapterConditionStatus) bool {
 	return hasAdapterCond(conditions, condType, status)
 }
 
 // HasResourceCondition checks if a resource condition with the given type and status exists in the conditions list
-func (h *Helper) HasResourceCondition(conditions []openapi.ResourceCondition, condType string, status openapi.ResourceConditionStatus) bool {
+func (h *Helper) HasResourceCondition(conditions []client.ResourceCondition, condType string, status client.ResourceConditionStatus) bool {
 	for _, cond := range conditions {
 		if cond.Type == condType && cond.Status == status {
 			return true
@@ -22,7 +22,7 @@ func (h *Helper) HasResourceCondition(conditions []openapi.ResourceCondition, co
 }
 
 // GetCondition retrieves a condition by type from the conditions list
-func (h *Helper) GetCondition(conditions []openapi.AdapterCondition, condType string) *openapi.AdapterCondition {
+func (h *Helper) GetCondition(conditions []client.AdapterCondition, condType string) *client.AdapterCondition {
 	for i := range conditions {
 		if conditions[i].Type == condType {
 			return &conditions[i]
@@ -32,9 +32,9 @@ func (h *Helper) GetCondition(conditions []openapi.AdapterCondition, condType st
 }
 
 // AllConditionsTrue checks if all specified condition types have status True
-func (h *Helper) AllConditionsTrue(conditions []openapi.AdapterCondition, condTypes []string) bool {
+func (h *Helper) AllConditionsTrue(conditions []client.AdapterCondition, condTypes []string) bool {
 	for _, condType := range condTypes {
-		if !h.HasAdapterCondition(conditions, condType, openapi.AdapterConditionStatusTrue) {
+		if !h.HasAdapterCondition(conditions, condType, client.AdapterConditionStatusTrue) {
 			return false
 		}
 	}
@@ -42,9 +42,9 @@ func (h *Helper) AllConditionsTrue(conditions []openapi.AdapterCondition, condTy
 }
 
 // AnyConditionFalse checks if any of the specified condition types have status False
-func (h *Helper) AnyConditionFalse(conditions []openapi.AdapterCondition, condTypes []string) bool {
+func (h *Helper) AnyConditionFalse(conditions []client.AdapterCondition, condTypes []string) bool {
 	for _, condType := range condTypes {
-		if h.HasAdapterCondition(conditions, condType, openapi.AdapterConditionStatusFalse) {
+		if h.HasAdapterCondition(conditions, condType, client.AdapterConditionStatusFalse) {
 			return true
 		}
 	}
@@ -56,10 +56,8 @@ func (h *Helper) AnyConditionFalse(conditions []openapi.AdapterCondition, condTy
 // Examples:
 //   - "cl-namespace" -> "ClNamespaceSuccessful"
 func (h *Helper) AdapterNameToConditionType(adapterName string) string {
-	// Split adapter name by "-" (e.g., "cl-namespace" -> ["cl", "namespace"])
 	parts := strings.Split(adapterName, "-")
 
-	// Capitalize each part and join them
 	var result strings.Builder
 	for _, part := range parts {
 		if len(part) > 0 {
@@ -67,7 +65,6 @@ func (h *Helper) AdapterNameToConditionType(adapterName string) string {
 		}
 	}
 
-	// Add "Successful" suffix
 	result.WriteString("Successful")
 
 	return result.String()

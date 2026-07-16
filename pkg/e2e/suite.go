@@ -1,9 +1,12 @@
 package e2e
 
 import (
-	"github.com/onsi/ginkgo/v2"
+	"context"
 	"log"
 
+	"github.com/onsi/ginkgo/v2"
+
+	k8sclient "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/logger"
@@ -37,6 +40,28 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	cfg.Display()
 	logger.Info("starting hyperfleet-e2e test suite - creating resources with", "run-id", cfg.RunID)
+
+	if cfg.Identity.TokenRequest.IsEnabled() {
+		k8s, err := k8sclient.NewClient()
+		if err != nil {
+			log.Fatalf("Failed to create K8s client for token acquisition: %v", err)
+		}
+		token, err := k8s.CreateToken(
+			context.Background(),
+			cfg.Identity.TokenRequest.Namespace,
+			cfg.Identity.TokenRequest.ServiceAccountName,
+			cfg.Identity.TokenRequest.Audience,
+			cfg.Identity.TokenRequest.ExpirationSeconds,
+		)
+		if err != nil {
+			log.Fatalf("Failed to acquire JWT via TokenRequest: %v", err)
+		}
+		cfg.Identity.SetToken(token)
+		logger.Info("acquired JWT for suite",
+			"service-account", cfg.Identity.TokenRequest.Namespace+"/"+cfg.Identity.TokenRequest.ServiceAccountName,
+			"audience", cfg.Identity.TokenRequest.Audience,
+			"expires-seconds", cfg.Identity.TokenRequest.ExpirationSeconds)
+	}
 
 	// Initialize adapter deployment list - for test tiers that deploy temporary adapters
 	adapterDeploymentList := helper.InitAdapterDeploymentList()

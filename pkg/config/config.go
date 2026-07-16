@@ -563,6 +563,19 @@ func (c *Config) Validate() error {
 		if c.Identity.TokenRequest.Namespace == "" {
 			return fmt.Errorf("configuration validation failed: identity.tokenRequest.namespace is required when tokenRequest is enabled")
 		}
+
+		// Reject token lifetimes shorter than the suite timeout (CWE-613).
+		// The token is acquired once before the suite; a shorter lifetime
+		// causes deterministic 401 failures later.
+		suiteTimeout := 2 * time.Hour
+		if t := viper.GetDuration(Tests.SuiteTimeout); t > 0 {
+			suiteTimeout = t
+		}
+		tokenLifetime := time.Duration(c.Identity.TokenRequest.ExpirationSeconds) * time.Second
+		if tokenLifetime > 0 && tokenLifetime < suiteTimeout {
+			return fmt.Errorf("configuration validation failed: identity.tokenRequest.expirationSeconds (%ds = %s) is shorter than the suite timeout (%s) - the JWT will expire mid-run causing 401 failures. Increase expirationSeconds or reduce SUITE_TIMEOUT",
+				c.Identity.TokenRequest.ExpirationSeconds, tokenLifetime, suiteTimeout)
+		}
 	}
 
 	return nil

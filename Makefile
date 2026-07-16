@@ -44,14 +44,8 @@ help: ## Display this help
 ##@ Code Generation
 
 .PHONY: generate
-generate: $(OAPI_CODEGEN) ## Generate API client code from OpenAPI schema
-	$(GO) mod download
-	rm -rf pkg/api/openapi
-	mkdir -p pkg/api/openapi openapi
-	@rm -f openapi/openapi.yaml
-	@cp "$$($(GO) list -m -f '{{.Dir}}' github.com/openshift-hyperfleet/hyperfleet-api-spec)/schemas/core/openapi.yaml" openapi/openapi.yaml
-	$(OAPI_CODEGEN) --config openapi/oapi-codegen.yaml openapi/openapi.yaml
-	@echo "✓ API client code generated in pkg/api/openapi/"
+generate: ## No-op (reserved for future code generation)
+	@:
 
 ##@ Development
 
@@ -72,8 +66,6 @@ run: build ## Build and run with help
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)
 	rm -rf $(OUTPUT_DIR)
-	rm -f openapi/openapi.yaml
-	rm -rf pkg/api/openapi
 	rm -f coverage.out coverage.html
 
 ##@ Testing

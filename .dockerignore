@@ -33,9 +33,6 @@ dist/
 output/
 out/
 
-# Generated code (will be regenerated in container)
-pkg/api/openapi/openapi.gen.go
-openapi/openapi.yaml
 
 # Test results
 *.xml

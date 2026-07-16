@@ -148,4 +148,4 @@ identity:
     serviceAccountName: ""
     namespace: ""
     audience: "hyperfleet-api"
-    expirationSeconds: 3600
+    expirationSeconds: 7200

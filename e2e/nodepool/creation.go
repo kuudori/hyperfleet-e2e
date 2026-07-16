@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -55,7 +54,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 						g.Expect(statuses.Items).NotTo(BeEmpty(), "at least one adapter should have executed")
 
 						// Build a map of adapter statuses for easy lookup
-						adapterMap := make(map[string]openapi.AdapterStatus)
+						adapterMap := make(map[string]client.AdapterStatus)
 						for _, adapter := range statuses.Items {
 							adapterMap[adapter.Adapter] = adapter
 						}
@@ -77,7 +76,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 							hasApplied := h.HasAdapterCondition(
 								adapter.Conditions,
 								client.ConditionTypeApplied,
-								openapi.AdapterConditionStatusTrue,
+								client.AdapterConditionStatusTrue,
 							)
 							g.Expect(hasApplied).To(BeTrue(),
 								"adapter %s should have Applied=True", adapter.Adapter)
@@ -85,7 +84,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 							hasAvailable := h.HasAdapterCondition(
 								adapter.Conditions,
 								client.ConditionTypeAvailable,
-								openapi.AdapterConditionStatusTrue,
+								client.AdapterConditionStatusTrue,
 							)
 							g.Expect(hasAvailable).To(BeTrue(),
 								"adapter %s should have Available=True", adapter.Adapter)
@@ -93,7 +92,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 							hasHealth := h.HasAdapterCondition(
 								adapter.Conditions,
 								client.ConditionTypeHealth,
-								openapi.AdapterConditionStatusTrue,
+								client.AdapterConditionStatusTrue,
 							)
 							g.Expect(hasHealth).To(BeTrue(),
 								"adapter %s should have Health=True", adapter.Adapter)
@@ -120,18 +119,18 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 					// Wait for nodepool Reconciled condition and verify both Reconciled and Available conditions are True
 					// This confirms the nodepool has reached the desired end state
 					Eventually(h.PollNodePool(ctx, clusterID, nodepoolID), h.Cfg.Timeouts.NodePool.Reconciled, h.Cfg.Polling.Interval).
-						Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+						Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 					finalNodePool, err := h.Client.GetNodePool(ctx, clusterID, nodepoolID)
 					Expect(err).NotTo(HaveOccurred(), "failed to get final nodepool state")
 					Expect(finalNodePool.Status).NotTo(BeNil(), "nodepool status should be present")
 
 					hasReconciled := h.HasResourceCondition(finalNodePool.Status.Conditions,
-						client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue)
+						client.ConditionTypeReconciled, client.ResourceConditionStatusTrue)
 					Expect(hasReconciled).To(BeTrue(), "nodepool should have Reconciled=True condition")
 
 					hasAvailable := h.HasResourceCondition(finalNodePool.Status.Conditions,
-						client.ConditionTypeLastKnownReconciled, openapi.ResourceConditionStatusTrue)
+						client.ConditionTypeLastKnownReconciled, client.ResourceConditionStatusTrue)
 					Expect(hasAvailable).To(BeTrue(), "nodepool should have LastKnownReconciled=True condition")
 
 					// Validate observedGeneration for Reconciled and LastKnownReconciled conditions
@@ -150,7 +149,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 						hasAdapterCondition := h.HasResourceCondition(
 							finalNodePool.Status.Conditions,
 							expectedCondType,
-							openapi.ResourceConditionStatusTrue,
+							client.ResourceConditionStatusTrue,
 						)
 						Expect(hasAdapterCondition).To(BeTrue(),
 							"nodepool should have %s=True condition for adapter %s",
@@ -205,7 +204,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 					// This confirms the nodepool workflow completed successfully and all K8s resources were created
 					// Without this, adapters may still be creating resources during cleanup
 					Eventually(h.PollNodePool(ctx, clusterID, nodepoolID), h.Cfg.Timeouts.NodePool.Reconciled, h.Cfg.Polling.Interval).
-						Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+						Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 				})
 		})
 
