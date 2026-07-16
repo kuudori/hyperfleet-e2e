@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/gomega" //nolint:staticcheck // Gomega matchers are designed to be used with dot import
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/maestro"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
@@ -231,7 +230,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 						g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
 
 						// Find the adapter status
-						var adapterStatus *openapi.AdapterStatus
+						var adapterStatus *client.AdapterStatus
 						for _, status := range statuses.Items {
 							if status.Adapter == adapterName {
 								adapterStatus = &status
@@ -253,7 +252,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 						hasApplied := h.HasAdapterCondition(
 							adapterStatus.Conditions,
 							client.ConditionTypeApplied,
-							openapi.AdapterConditionStatusTrue,
+							client.AdapterConditionStatusTrue,
 						)
 						g.Expect(hasApplied).To(BeTrue(),
 							"adapter should have Applied=True")
@@ -267,7 +266,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 						hasAvailable := h.HasAdapterCondition(
 							adapterStatus.Conditions,
 							client.ConditionTypeAvailable,
-							openapi.AdapterConditionStatusTrue,
+							client.AdapterConditionStatusTrue,
 						)
 						g.Expect(hasAvailable).To(BeTrue(),
 							"adapter should have Available=True")
@@ -281,7 +280,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 						hasHealth := h.HasAdapterCondition(
 							adapterStatus.Conditions,
 							client.ConditionTypeHealth,
-							openapi.AdapterConditionStatusTrue,
+							client.AdapterConditionStatusTrue,
 						)
 						g.Expect(hasHealth).To(BeTrue(),
 							"adapter should have Health=True")
@@ -293,24 +292,24 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 						g.Expect(*healthCond.Reason).To(Equal("Healthy"))
 
 						// Verify data fields
-						g.Expect(adapterStatus.Data).NotTo(BeNil(), "adapter data should be present")
-						if adapterStatus.Data == nil {
+						g.Expect(adapterStatus.Data).NotTo(BeEmpty(), "adapter data should be present")
+						if len(adapterStatus.Data) == 0 {
 							return // let Eventually retry with clean failure message
 						}
 
 						// Verify manifestwork data
-						manifestworkData, ok := (*adapterStatus.Data)["manifestwork"].(map[string]interface{})
+						manifestworkData, ok := adapterStatus.Data["manifestwork"].(map[string]interface{})
 						g.Expect(ok).To(BeTrue(), "manifestwork data should be present")
 						g.Expect(manifestworkData["name"]).To(Equal(fmt.Sprintf("%s-%s", clusterID, adapterName)))
 
 						// Verify namespace data
-						namespaceData, ok := (*adapterStatus.Data)["namespace"].(map[string]interface{})
+						namespaceData, ok := adapterStatus.Data["namespace"].(map[string]interface{})
 						g.Expect(ok).To(BeTrue(), "namespace data should be present")
 						g.Expect(namespaceData["phase"]).To(Equal("Active"))
 						g.Expect(namespaceData["name"]).To(Equal(namespaceName))
 
 						// Verify configmap data
-						configmapData, ok := (*adapterStatus.Data)["configmap"].(map[string]interface{})
+						configmapData, ok := adapterStatus.Data["configmap"].(map[string]interface{})
 						g.Expect(ok).To(BeTrue(), "configmap data should be present")
 						g.Expect(configmapData["clusterId"]).To(Equal(clusterID))
 						g.Expect(configmapData["name"]).To(Equal(configmapName))
@@ -365,7 +364,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 						statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 						g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
 
-						var adapterStatus *openapi.AdapterStatus
+						var adapterStatus *client.AdapterStatus
 						for _, status := range statuses.Items {
 							if status.Adapter == adapterName {
 								adapterStatus = &status
@@ -385,7 +384,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 						statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 						g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
 
-						var adapterStatus *openapi.AdapterStatus
+						var adapterStatus *client.AdapterStatus
 						for _, status := range statuses.Items {
 							if status.Adapter == adapterName {
 								adapterStatus = &status
@@ -543,7 +542,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					g.Expect(statuses.Items).NotTo(BeEmpty(), "adapter should have reported status")
 
 					// Find the test adapter status
-					var adapterStatus *openapi.AdapterStatus
+					var adapterStatus *client.AdapterStatus
 					for i, adapter := range statuses.Items {
 						if adapter.Adapter == adapterName {
 							adapterStatus = &statuses.Items[i]
@@ -559,7 +558,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						"adapter should have observed_generation=1")
 
 					// Find Health condition
-					var healthCondition *openapi.AdapterCondition
+					var healthCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeHealth {
 							healthCondition = &adapterStatus.Conditions[i]
@@ -571,7 +570,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						"adapter should have Health condition")
 
 					// Verify Health condition reports failure
-					g.Expect(healthCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
+					g.Expect(healthCondition.Status).To(Equal(client.AdapterConditionStatusFalse),
 						"adapter Health condition should be False due to unregistered consumer")
 
 					// Verify error details mention consumer not found/registered
@@ -585,7 +584,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					), "error message should mention unregistered consumer")
 
 					// Find Applied condition - should be False
-					var appliedCondition *openapi.AdapterCondition
+					var appliedCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeApplied {
 							appliedCondition = &adapterStatus.Conditions[i]
@@ -595,7 +594,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 					g.Expect(appliedCondition).NotTo(BeNil(),
 						"adapter should have Applied condition")
-					g.Expect(appliedCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
+					g.Expect(appliedCondition.Status).To(Equal(client.AdapterConditionStatusFalse),
 						"adapter Applied condition should be False since ManifestWork was not created")
 
 					ginkgo.GinkgoWriter.Printf("Verified adapter failure for unregistered consumer: Health=%s, Applied=%s\n",
@@ -725,7 +724,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					g.Expect(statuses.Items).NotTo(BeEmpty(), "adapter should have reported status")
 
 					// Find the test adapter status
-					var adapterStatus *openapi.AdapterStatus
+					var adapterStatus *client.AdapterStatus
 					for i, adapter := range statuses.Items {
 						if adapter.Adapter == adapterName {
 							adapterStatus = &statuses.Items[i]
@@ -741,7 +740,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						"adapter should have observed_generation=1")
 
 					// Find Applied condition - should be False (ManifestWork not discovered)
-					var appliedCondition *openapi.AdapterCondition
+					var appliedCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeApplied {
 							appliedCondition = &adapterStatus.Conditions[i]
@@ -751,14 +750,14 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 					g.Expect(appliedCondition).NotTo(BeNil(),
 						"adapter should have Applied condition")
-					g.Expect(appliedCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
+					g.Expect(appliedCondition.Status).To(Equal(client.AdapterConditionStatusFalse),
 						"Applied should be False - ManifestWork not discovered")
 					g.Expect(appliedCondition.Reason).NotTo(BeNil())
 					g.Expect(*appliedCondition.Reason).To(Equal("ManifestWorkNotDiscovered"),
 						"Applied reason should be ManifestWorkNotDiscovered")
 
 					// Find Available condition - should be False
-					var availableCondition *openapi.AdapterCondition
+					var availableCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeAvailable {
 							availableCondition = &adapterStatus.Conditions[i]
@@ -768,14 +767,14 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 					g.Expect(availableCondition).NotTo(BeNil(),
 						"adapter should have Available condition")
-					g.Expect(availableCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
+					g.Expect(availableCondition.Status).To(Equal(client.AdapterConditionStatusFalse),
 						"Available should be False")
 					g.Expect(availableCondition.Reason).NotTo(BeNil())
 					g.Expect(*availableCondition.Reason).To(Equal("NamespaceNotDiscovered"),
 						"Available reason should be NamespaceNotDiscovered")
 
 					// Find Health condition - should be False (execution failed)
-					var healthCondition *openapi.AdapterCondition
+					var healthCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeHealth {
 							healthCondition = &adapterStatus.Conditions[i]
@@ -785,7 +784,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 					g.Expect(healthCondition).NotTo(BeNil(),
 						"adapter should have Health condition")
-					g.Expect(healthCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
+					g.Expect(healthCondition.Status).To(Equal(client.AdapterConditionStatusFalse),
 						"Health should be False - discovery failed")
 					g.Expect(healthCondition.Reason).NotTo(BeNil())
 					g.Expect(*healthCondition.Reason).To(Equal("ExecutionFailed:resources"),
@@ -795,10 +794,10 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						"Health message should mention ManifestWork not found")
 
 					// Verify data section - all fields empty (main discovery failed)
-					g.Expect(adapterStatus.Data).NotTo(BeNil(), "adapter status should have data")
+					g.Expect(adapterStatus.Data).NotTo(BeEmpty(), "adapter status should have data")
 
 					// ManifestWork name should be empty (main discovery failed)
-					if manifestworkData, ok := (*adapterStatus.Data)["manifestwork"].(map[string]interface{}); ok {
+					if manifestworkData, ok := adapterStatus.Data["manifestwork"].(map[string]interface{}); ok {
 						if nameVal, exists := manifestworkData["name"]; exists {
 							g.Expect(nameVal).To(Or(BeNil(), Equal("")),
 								"manifestwork name should be empty - main discovery failed")
@@ -806,7 +805,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					}
 
 					// Namespace name should be empty
-					if namespaceData, ok := (*adapterStatus.Data)["namespace"].(map[string]interface{}); ok {
+					if namespaceData, ok := adapterStatus.Data["namespace"].(map[string]interface{}); ok {
 						if nameVal, exists := namespaceData["name"]; exists {
 							g.Expect(nameVal).To(Or(BeNil(), Equal("")),
 								"namespace name should be empty")
@@ -814,7 +813,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					}
 
 					// ConfigMap name should be empty
-					if configmapData, ok := (*adapterStatus.Data)["configmap"].(map[string]interface{}); ok {
+					if configmapData, ok := adapterStatus.Data["configmap"].(map[string]interface{}); ok {
 						if nameVal, exists := configmapData["name"]; exists {
 							g.Expect(nameVal).To(Or(BeNil(), Equal("")),
 								"configmap name should be empty")
@@ -908,7 +907,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					g.Expect(statuses.Items).NotTo(BeEmpty(), "adapter should have reported status")
 
 					// Find the test adapter status
-					var adapterStatus *openapi.AdapterStatus
+					var adapterStatus *client.AdapterStatus
 					for i, adapter := range statuses.Items {
 						if adapter.Adapter == adapterName {
 							adapterStatus = &statuses.Items[i]
@@ -924,7 +923,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						"adapter should have observed_generation=1")
 
 					// Find Applied condition - should be True (ManifestWork created successfully)
-					var appliedCondition *openapi.AdapterCondition
+					var appliedCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeApplied {
 							appliedCondition = &adapterStatus.Conditions[i]
@@ -934,11 +933,11 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 					g.Expect(appliedCondition).NotTo(BeNil(),
 						"adapter should have Applied condition")
-					g.Expect(appliedCondition.Status).To(Equal(openapi.AdapterConditionStatusTrue),
+					g.Expect(appliedCondition.Status).To(Equal(client.AdapterConditionStatusTrue),
 						"adapter Applied condition should be True since ManifestWork was created")
 
 					// Find Available condition - should be False (nested resources not discovered)
-					var availableCondition *openapi.AdapterCondition
+					var availableCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeAvailable {
 							availableCondition = &adapterStatus.Conditions[i]
@@ -948,12 +947,12 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 					g.Expect(availableCondition).NotTo(BeNil(),
 						"adapter should have Available condition")
-					g.Expect(availableCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
+					g.Expect(availableCondition.Status).To(Equal(client.AdapterConditionStatusFalse),
 						"adapter Available condition should be False since nested discovery returned empty")
 
 					// Find Health condition - should be True (adapter executed successfully)
 					// Note: Nested discovery failure doesn't affect Health - the adapter ran successfully
-					var healthCondition *openapi.AdapterCondition
+					var healthCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeHealth {
 							healthCondition = &adapterStatus.Conditions[i]
@@ -963,7 +962,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 					g.Expect(healthCondition).NotTo(BeNil(),
 						"adapter should have Health condition")
-					g.Expect(healthCondition.Status).To(Equal(openapi.AdapterConditionStatusTrue),
+					g.Expect(healthCondition.Status).To(Equal(client.AdapterConditionStatusTrue),
 						"adapter Health condition should be True - nested discovery failure doesn't affect health")
 					g.Expect(healthCondition.Reason).NotTo(BeNil(),
 						"Health condition should have a reason")
@@ -975,11 +974,11 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						"Health message should indicate successful execution")
 
 					// Verify data field shows fallback/empty values for nested resources
-					g.Expect(adapterStatus.Data).NotTo(BeNil(),
+					g.Expect(adapterStatus.Data).NotTo(BeEmpty(),
 						"adapter status should have data field")
 
 					// Check that namespace data is either empty or has fallback values
-					if namespaceData, ok := (*adapterStatus.Data)["namespace"].(map[string]interface{}); ok {
+					if namespaceData, ok := adapterStatus.Data["namespace"].(map[string]interface{}); ok {
 						// Namespace name should be empty string or default value
 						if name, exists := namespaceData["name"]; exists {
 							g.Expect(name).To(Or(BeEmpty(), Equal("")),
@@ -1079,7 +1078,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
 
 					// Find the test adapter status
-					var adapterStatus *openapi.AdapterStatus
+					var adapterStatus *client.AdapterStatus
 					for _, adapter := range statuses.Items {
 						if adapter.Adapter == adapterName {
 							adapterStatus = &adapter

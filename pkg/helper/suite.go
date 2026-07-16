@@ -3,10 +3,8 @@ package helper
 import (
 	"context"
 	"log"
-	"net/http"
 	"sync"
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	k8sclient "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
@@ -89,13 +87,9 @@ func New() *Helper {
 			cfg.Identity.TokenRequest.ExpirationSeconds)
 	}
 
-	var opts []openapi.ClientOption
+	var opts []client.ClientOption
 	if token := cfg.Identity.Token(); token != "" {
-		opts = append(opts, openapi.WithRequestEditorFn(
-			func(_ context.Context, req *http.Request) error {
-				req.Header.Set("Authorization", "Bearer "+token)
-				return nil
-			}))
+		opts = append(opts, client.WithBearerToken(token))
 	}
 
 	cl, err := client.NewHyperFleetClient(cfg.API.URL, nil, opts...)

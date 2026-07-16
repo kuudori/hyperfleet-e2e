@@ -44,7 +44,7 @@ Pre-flight order: `make check` then `make build`.
 | Labels | `pkg/labels/labels.go` |
 | Condition type constants | `pkg/client/constants.go` |
 | Config file | `configs/config.yaml` |
-| Identity config & transport | `pkg/config/config.go` (`IdentityConfig`), `pkg/helper/suite.go` (RequestEditorFn wiring) |
+| Identity config & transport | `pkg/config/config.go` (`IdentityConfig`), `pkg/helper/suite.go` (WithBearerToken wiring) |
 
 ## Test Conventions
 
@@ -72,7 +72,7 @@ Optional: `labels.Negative`, `labels.Performance`, `labels.Upgrade`, `labels.Dis
 ```go
 // Wait for resource condition
 Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 // Wait for all adapters at generation
 Eventually(h.PollClusterAdapterStatuses(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
@@ -141,7 +141,7 @@ HYPERFLEET_IDENTITY_EXPECTEDIDENTITY=system:serviceaccount:hyperfleet:hyperfleet
 ./bin/hyperfleet-e2e test
 ```
 
-The acquired token is injected as `Authorization: Bearer` on every API request via `openapi.WithRequestEditorFn`.
+The acquired token is injected as `Authorization: Bearer` on every API request via `client.WithBearerToken`.
 
 The `expectedIdentity` field is the audit identity the API resolves from the JWT claim. It's used by test assertions to verify `created_by` / `deleted_by` fields:
 

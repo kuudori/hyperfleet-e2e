@@ -6,7 +6,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -34,7 +33,7 @@ var _ = ginkgo.Describe("[Suite: cluster][update] Cluster Update Lifecycle",
 			})
 
 			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should update cluster via PATCH, trigger reconciliation, and reach Reconciled at new generation", func(ctx context.Context) {
@@ -68,7 +67,7 @@ var _ = ginkgo.Describe("[Suite: cluster][update] Cluster Update Lifecycle",
 
 				found := false
 				for _, cond := range finalCluster.Status.Conditions {
-					if cond.Type == client.ConditionTypeReconciled && cond.Status == openapi.ResourceConditionStatusTrue {
+					if cond.Type == client.ConditionTypeReconciled && cond.Status == client.ResourceConditionStatusTrue {
 						found = true
 						g.Expect(cond.ObservedGeneration).To(Equal(expectedGen), "Reconciled condition observed_generation should match expected")
 					}

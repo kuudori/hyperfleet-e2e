@@ -8,7 +8,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -138,7 +137,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 				})
 
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 				ginkgo.By("Verify stuck-adapter reported Applied=True")
 				Eventually(func(g Gomega) {
@@ -150,7 +149,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 						if s.Adapter == adapterName {
 							found = true
 							g.Expect(h.HasAdapterCondition(s.Conditions,
-								client.ConditionTypeApplied, openapi.AdapterConditionStatusTrue)).To(BeTrue(),
+								client.ConditionTypeApplied, client.AdapterConditionStatusTrue)).To(BeTrue(),
 								"stuck-adapter should have Applied=True before scale-down")
 							break
 						}
@@ -172,7 +171,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 					statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 					g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
 
-					adapterMap := make(map[string]openapi.AdapterStatus, len(statuses.Items))
+					adapterMap := make(map[string]client.AdapterStatus, len(statuses.Items))
 					for _, s := range statuses.Items {
 						adapterMap[s.Adapter] = s
 					}
@@ -181,7 +180,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 						adapter, exists := adapterMap[name]
 						g.Expect(exists).To(BeTrue(), "adapter %s should be present", name)
 						g.Expect(h.HasAdapterCondition(adapter.Conditions,
-							client.ConditionTypeFinalized, openapi.AdapterConditionStatusTrue)).To(BeTrue(),
+							client.ConditionTypeFinalized, client.AdapterConditionStatusTrue)).To(BeTrue(),
 							"adapter %s should have Finalized=True", name)
 					}
 				}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
@@ -193,7 +192,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 					g.Expect(cl.DeletedTime).NotTo(BeNil(), "cluster should still be soft-deleted")
 
 					g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-						client.ConditionTypeReconciled, openapi.ResourceConditionStatusFalse)).To(BeTrue(),
+						client.ConditionTypeReconciled, client.ResourceConditionStatusFalse)).To(BeTrue(),
 						"cluster Reconciled should remain False while stuck-adapter is unavailable")
 
 					statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
@@ -202,7 +201,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 					for _, s := range statuses.Items {
 						if s.Adapter == adapterName {
 							g.Expect(h.HasAdapterCondition(s.Conditions,
-								client.ConditionTypeFinalized, openapi.AdapterConditionStatusTrue)).To(BeFalse(),
+								client.ConditionTypeFinalized, client.AdapterConditionStatusTrue)).To(BeFalse(),
 								"stuck-adapter should NOT have Finalized=True while scaled to 0")
 							break
 						}

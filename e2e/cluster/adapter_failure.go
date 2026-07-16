@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -125,11 +124,11 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 					g.Expect(cl.Status).NotTo(BeNil(), "cluster status should be present")
 
 					g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-						client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue)).To(BeTrue(),
+						client.ConditionTypeReconciled, client.ResourceConditionStatusTrue)).To(BeTrue(),
 						"cluster Reconciled should become True despite non-required adapter failure")
 
 					g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-						client.ConditionTypeLastKnownReconciled, openapi.ResourceConditionStatusTrue)).To(BeTrue(),
+						client.ConditionTypeLastKnownReconciled, client.ResourceConditionStatusTrue)).To(BeTrue(),
 						"cluster LastKnownReconciled should become True despite non-required adapter failure")
 				}, h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).Should(Succeed())
 
@@ -139,7 +138,7 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter 
 				statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 				Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
 
-				var adapterStatus *openapi.AdapterStatus
+				var adapterStatus *client.AdapterStatus
 				for i, status := range statuses.Items {
 					if status.Adapter == adapterName {
 						adapterStatus = &statuses.Items[i]

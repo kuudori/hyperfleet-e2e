@@ -6,18 +6,17 @@ import (
 
 	"github.com/onsi/gomega/types"
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 )
 
-// HaveResourceCondition matches a *Cluster or *NodePool that has the specified condition type and status.
-func HaveResourceCondition(condType string, status openapi.ResourceConditionStatus) types.GomegaMatcher {
+// HaveResourceCondition matches a *Resource that has the specified condition type and status.
+func HaveResourceCondition(condType string, status client.ResourceConditionStatus) types.GomegaMatcher {
 	return &resourceConditionMatcher{condType: condType, status: status}
 }
 
 type resourceConditionMatcher struct {
 	condType string
-	status   openapi.ResourceConditionStatus
+	status   client.ResourceConditionStatus
 	actual   string
 }
 
@@ -49,7 +48,7 @@ func (m *resourceConditionMatcher) NegatedFailureMessage(_ any) string {
 
 // HaveAllAdaptersWithCondition matches an *AdapterStatusList where every required
 // adapter has the specified condition type and status.
-func HaveAllAdaptersWithCondition(requiredAdapters []string, condType string, status openapi.AdapterConditionStatus) types.GomegaMatcher {
+func HaveAllAdaptersWithCondition(requiredAdapters []string, condType string, status client.AdapterConditionStatus) types.GomegaMatcher {
 	return &allAdaptersConditionMatcher{
 		adapters: requiredAdapters,
 		condType: condType,
@@ -60,12 +59,12 @@ func HaveAllAdaptersWithCondition(requiredAdapters []string, condType string, st
 type allAdaptersConditionMatcher struct {
 	adapters []string
 	condType string
-	status   openapi.AdapterConditionStatus
+	status   client.AdapterConditionStatus
 	missing  []string
 }
 
 func (m *allAdaptersConditionMatcher) Match(actual any) (bool, error) {
-	list, ok := actual.(*openapi.AdapterStatusList)
+	list, ok := actual.(*client.AdapterStatusList)
 	if !ok {
 		return false, fmt.Errorf("HaveAllAdaptersWithCondition expects *AdapterStatusList, got %T", actual)
 	}
@@ -74,7 +73,7 @@ func (m *allAdaptersConditionMatcher) Match(actual any) (bool, error) {
 	}
 
 	m.missing = nil
-	adapterMap := make(map[string]openapi.AdapterStatus, len(list.Items))
+	adapterMap := make(map[string]client.AdapterStatus, len(list.Items))
 	for _, s := range list.Items {
 		adapterMap[s.Adapter] = s
 	}
@@ -116,7 +115,7 @@ type allAdaptersGenerationMatcher struct {
 }
 
 func (m *allAdaptersGenerationMatcher) Match(actual any) (bool, error) {
-	list, ok := actual.(*openapi.AdapterStatusList)
+	list, ok := actual.(*client.AdapterStatusList)
 	if !ok {
 		return false, fmt.Errorf("HaveAllAdaptersAtGeneration expects *AdapterStatusList, got %T", actual)
 	}
@@ -125,7 +124,7 @@ func (m *allAdaptersGenerationMatcher) Match(actual any) (bool, error) {
 	}
 
 	m.failures = nil
-	adapterMap := make(map[string]openapi.AdapterStatus, len(list.Items))
+	adapterMap := make(map[string]client.AdapterStatus, len(list.Items))
 	for _, s := range list.Items {
 		adapterMap[s.Adapter] = s
 	}
@@ -141,7 +140,7 @@ func (m *allAdaptersGenerationMatcher) Match(actual any) (bool, error) {
 			continue
 		}
 		for _, ct := range []string{client.ConditionTypeApplied, client.ConditionTypeAvailable, client.ConditionTypeHealth} {
-			if !hasAdapterCond(adapter.Conditions, ct, openapi.AdapterConditionStatusTrue) {
+			if !hasAdapterCond(adapter.Conditions, ct, client.AdapterConditionStatusTrue) {
 				m.failures = append(m.failures, fmt.Sprintf("%s: %s!=True", name, ct))
 			}
 		}
@@ -157,7 +156,7 @@ func (m *allAdaptersGenerationMatcher) NegatedFailureMessage(_ any) string {
 	return fmt.Sprintf("expected adapters NOT at generation %d", m.generation)
 }
 
-// HaveAuditIdentity matches a *Cluster or *Resource whose CreatedBy field equals the expected identity.
+// HaveAuditIdentity matches a *Resource whose CreatedBy field equals the expected identity.
 func HaveAuditIdentity(expected string) types.GomegaMatcher {
 	return &auditIdentityMatcher{expected: expected}
 }
@@ -185,26 +184,20 @@ func (m *auditIdentityMatcher) NegatedFailureMessage(_ any) string {
 }
 
 func extractCreatedBy(actual any) (string, error) {
-	switch v := actual.(type) {
-	case *openapi.Cluster:
-		if v == nil {
-			return "", fmt.Errorf("HaveAuditIdentity expects non-nil *Cluster")
-		}
-		return v.CreatedBy, nil
-	case *client.Resource:
-		if v == nil {
-			return "", fmt.Errorf("HaveAuditIdentity expects non-nil *Resource")
-		}
-		if v.CreatedBy == nil {
-			return "", nil
-		}
-		return *v.CreatedBy, nil
-	default:
-		return "", fmt.Errorf("HaveAuditIdentity expects *Cluster or *Resource, got %T", actual)
+	v, ok := actual.(*client.Resource)
+	if !ok {
+		return "", fmt.Errorf("HaveAuditIdentity expects *Resource, got %T", actual)
 	}
+	if v == nil {
+		return "", fmt.Errorf("HaveAuditIdentity expects non-nil *Resource")
+	}
+	if v.CreatedBy == nil {
+		return "", nil
+	}
+	return *v.CreatedBy, nil
 }
 
-func hasAdapterCond(conditions []openapi.AdapterCondition, condType string, status openapi.AdapterConditionStatus) bool {
+func hasAdapterCond(conditions []client.AdapterCondition, condType string, status client.AdapterConditionStatus) bool {
 	for _, c := range conditions {
 		if c.Type == condType && c.Status == status {
 			return true
@@ -213,24 +206,18 @@ func hasAdapterCond(conditions []openapi.AdapterCondition, condType string, stat
 	return false
 }
 
-func extractResourceConditions(actual any) ([]openapi.ResourceCondition, error) {
-	switch v := actual.(type) {
-	case *openapi.Cluster:
-		if v == nil {
-			return nil, nil
-		}
-		return v.Status.Conditions, nil
-	case *openapi.NodePool:
-		if v == nil {
-			return nil, nil
-		}
-		return v.Status.Conditions, nil
-	default:
-		return nil, fmt.Errorf("HaveResourceCondition expects *Cluster or *NodePool, got %T", actual)
+func extractResourceConditions(actual any) ([]client.ResourceCondition, error) {
+	v, ok := actual.(*client.Resource)
+	if !ok {
+		return nil, fmt.Errorf("HaveResourceCondition expects *Resource, got %T", actual)
 	}
+	if v == nil {
+		return nil, nil
+	}
+	return v.Status.Conditions, nil
 }
 
-func formatResourceConditions(conditions []openapi.ResourceCondition) string {
+func formatResourceConditions(conditions []client.ResourceCondition) string {
 	if len(conditions) == 0 {
 		return "<no conditions>"
 	}

@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -35,7 +34,7 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Full Lifecycle Smoke
 
 				ginkgo.By("waiting for Reconciled=True")
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 				ginkgo.By("confirming reconciled state via GET")
 				reconciledCluster, err := h.Client.GetCluster(ctx, clusterID)
@@ -43,7 +42,7 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Full Lifecycle Smoke
 				Expect(reconciledCluster).NotTo(BeNil(), "GET should return cluster object")
 				Expect(reconciledCluster.Status).NotTo(BeNil())
 				Expect(h.HasResourceCondition(reconciledCluster.Status.Conditions,
-					client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue)).To(BeTrue())
+					client.ConditionTypeReconciled, client.ResourceConditionStatusTrue)).To(BeTrue())
 
 				ginkgo.By("soft-deleting the cluster")
 				deletedCluster, err := h.Client.DeleteCluster(ctx, clusterID)
