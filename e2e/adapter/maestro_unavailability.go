@@ -13,7 +13,7 @@ import (
 )
 
 var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter can handle Maestro server unavailability gracefully",
-	ginkgo.Serial,
+	ginkgo.Serial, // Serial: scales down maestro, blocking all concurrent adapter specs
 	ginkgo.Label(labels.Tier2, labels.Negative, labels.Disruptive),
 	func() {
 		var h *helper.Helper

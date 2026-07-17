@@ -13,6 +13,7 @@ import (
 )
 
 var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reflect Adapter Failure in Top-Level Status",
+	ginkgo.Serial, // Serial: deploys temp adapter subscribing to all events, causes cross-talk
 	ginkgo.Label(labels.Tier1, labels.Negative),
 	func() {
 		var (
