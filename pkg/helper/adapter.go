@@ -89,7 +89,6 @@ type AdapterDeploymentOptions struct {
 const maxReleaseNameLength = 48
 
 func GenerateAdapterReleaseName(resourceType, adapterName string) string {
-
 	releaseName := fmt.Sprintf("adapter-%s-%s", resourceType, adapterName)
 
 	if len(releaseName) > maxReleaseNameLength {
@@ -224,28 +223,8 @@ func (h *Helper) DeployAdapter(ctx context.Context, opts AdapterDeploymentOption
 		"-f", valuesFilePath,
 	}
 
-	// Add fullnameOverride to ensure consistent release naming
-	helmArgs = append(helmArgs,
-		"--set", fmt.Sprintf("fullnameOverride=%s", releaseName),
-	)
-
-	// Add run-id label for resource tracking and cleanup
-	if h.Cfg.RunID != "" {
-		// Label the Helm release itself (for Helm SDK-based cleanup)
-		helmArgs = append(helmArgs,
-			"--labels", fmt.Sprintf("e2e.hyperfleet.io/run-id=%s", h.Cfg.RunID),
-		)
-	}
-
-	// Override image pull policy if set (e.g. IfNotPresent for local kind clusters)
-	if policy := os.Getenv("IMAGE_PULL_POLICY"); policy != "" {
-		helmArgs = append(helmArgs, "--set", fmt.Sprintf("image.pullPolicy=%s", policy))
-	}
-
-	// Add additional --set values if provided
-	for key, value := range opts.SetValues {
-		helmArgs = append(helmArgs, "--set", fmt.Sprintf("%s=%s", key, value))
-	}
+	// Append conditional --set flags
+	helmArgs = append(helmArgs, h.adapterHelmSetArgs(releaseName, opts)...)
 
 	logger.Info("executing Helm command", "args", helmArgs)
 
@@ -277,6 +256,37 @@ func (h *Helper) DeployAdapter(ctx context.Context, opts AdapterDeploymentOption
 		"output", string(output))
 
 	return nil
+}
+
+// adapterHelmSetArgs builds the conditional --set flags for adapter Helm deployments.
+// Extracted for testability - DeployAdapter calls this to append flags after the base args.
+func (h *Helper) adapterHelmSetArgs(releaseName string, opts AdapterDeploymentOptions) []string {
+	var args []string
+
+	// Ensure consistent release naming
+	args = append(args, "--set", fmt.Sprintf("fullnameOverride=%s", releaseName))
+
+	// Add run-id label for resource tracking and cleanup
+	if h.Cfg.RunID != "" {
+		args = append(args, "--labels", fmt.Sprintf("e2e.hyperfleet.io/run-id=%s", h.Cfg.RunID))
+	}
+
+	// Override image pull policy if set (e.g. IfNotPresent for local kind clusters)
+	if policy := os.Getenv("IMAGE_PULL_POLICY"); policy != "" {
+		args = append(args, "--set", fmt.Sprintf("image.pullPolicy=%s", policy))
+	}
+
+	// Enable adapter API auth when JWT is enabled on the API server
+	if h.Cfg.Identity.TokenRequest.IsEnabled() {
+		args = append(args, "--set", "adapterConfig.hyperfleetApi.auth.enabled=true")
+	}
+
+	// Add additional --set values if provided
+	for key, value := range opts.SetValues {
+		args = append(args, "--set", fmt.Sprintf("%s=%s", key, value))
+	}
+
+	return args
 }
 
 // resolveInternalAPIURL looks up the hyperfleet-api Kubernetes service in the configured

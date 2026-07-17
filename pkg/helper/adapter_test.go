@@ -380,3 +380,69 @@ func TestDeletePubSubSubscription(t *testing.T) {
 		})
 	}
 }
+
+func TestAdapterHelmSetArgs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		tokenRequestSA string // ServiceAccountName - non-empty enables JWT
+		runID          string
+		setValues      map[string]string
+		wantContains   []string // substrings that must appear in joined args
+		wantAbsent     []string // substrings that must NOT appear
+	}{
+		{
+			name:           "includes auth flag when JWT is enabled",
+			tokenRequestSA: "hyperfleet-e2e-sa",
+			wantContains:   []string{"adapterConfig.hyperfleetApi.auth.enabled=true"},
+		},
+		{
+			name:       "omits auth flag when JWT is disabled",
+			wantAbsent: []string{"adapterConfig.hyperfleetApi.auth.enabled"},
+		},
+		{
+			name:         "includes fullnameOverride",
+			wantContains: []string{"fullnameOverride=test-release"},
+		},
+		{
+			name:         "includes run-id label when set",
+			runID:        "abc-123",
+			wantContains: []string{"e2e.hyperfleet.io/run-id=abc-123"},
+		},
+		{
+			name:       "omits run-id label when empty",
+			wantAbsent: []string{"e2e.hyperfleet.io/run-id"},
+		},
+		{
+			name:         "includes custom set values",
+			setValues:    map[string]string{"image.tag": "latest"},
+			wantContains: []string{"image.tag=latest"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{RunID: tt.runID}
+			cfg.Identity.TokenRequest.ServiceAccountName = tt.tokenRequestSA
+
+			h := &Helper{Cfg: cfg}
+			opts := AdapterDeploymentOptions{SetValues: tt.setValues}
+			args := h.adapterHelmSetArgs("test-release", opts)
+			joined := strings.Join(args, " ")
+
+			for _, want := range tt.wantContains {
+				if !strings.Contains(joined, want) {
+					t.Errorf("expected args to contain %q, got: %v", want, args)
+				}
+			}
+			for _, absent := range tt.wantAbsent {
+				if strings.Contains(joined, absent) {
+					t.Errorf("expected args NOT to contain %q, got: %v", absent, args)
+				}
+			}
+		})
+	}
+}
