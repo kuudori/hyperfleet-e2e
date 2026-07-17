@@ -89,7 +89,6 @@ type AdapterDeploymentOptions struct {
 const maxReleaseNameLength = 48
 
 func GenerateAdapterReleaseName(resourceType, adapterName string) string {
-
 	releaseName := fmt.Sprintf("adapter-%s-%s", resourceType, adapterName)
 
 	if len(releaseName) > maxReleaseNameLength {
@@ -240,6 +239,11 @@ func (h *Helper) DeployAdapter(ctx context.Context, opts AdapterDeploymentOption
 	// Override image pull policy if set (e.g. IfNotPresent for local kind clusters)
 	if policy := os.Getenv("IMAGE_PULL_POLICY"); policy != "" {
 		helmArgs = append(helmArgs, "--set", fmt.Sprintf("image.pullPolicy=%s", policy))
+	}
+
+	// Enable adapter API auth when JWT is enabled on the API server
+	if h.Cfg.Identity.TokenRequest.IsEnabled() {
+		helmArgs = append(helmArgs, "--set", "adapterConfig.hyperfleetApi.auth.enabled=true")
 	}
 
 	// Add additional --set values if provided
