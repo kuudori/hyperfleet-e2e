@@ -250,6 +250,9 @@ func (m *rfc9457ErrorMatcher) Match(actual any) (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("HaveRFC9457Error expects *http.Response, got %T", actual)
 	}
+	if resp == nil {
+		return false, fmt.Errorf("HaveRFC9457Error expects non-nil *http.Response")
+	}
 
 	// Read body first so FailureMessage always has diagnostic content.
 	if resp.Body != nil {
@@ -266,7 +269,9 @@ func (m *rfc9457ErrorMatcher) Match(actual any) (bool, error) {
 		return false, nil
 	}
 
-	var problem openapi.ProblemDetails
+	var problem struct {
+		Code *string `json:"code"`
+	}
 	if err := json.Unmarshal([]byte(m.body), &problem); err != nil {
 		m.actual = fmt.Sprintf("body is not valid ProblemDetails JSON: %s", m.body)
 		return false, nil

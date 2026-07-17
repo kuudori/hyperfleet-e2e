@@ -8,7 +8,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -38,24 +37,23 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 
 				h.DeferClusterCleanup(clusterID)
 
-				Expect(cluster.CreatedBy).To(Equal(expected),
+				Expect(cluster.CreatedBy).To(HaveValue(Equal(expected)),
 					"created_by should contain the JWT sub claim identity")
 
 				ginkgo.By("patching the cluster and verifying updated_by")
 				patched, err := h.Client.PatchClusterFromPayload(ctx, clusterID, h.TestDataPath("payloads/clusters/cluster-patch.json"))
 				Expect(err).NotTo(HaveOccurred(), "cluster PATCH should succeed")
-				Expect(patched.UpdatedBy).To(Equal(expected),
+				Expect(patched.UpdatedBy).To(HaveValue(Equal(expected)),
 					"updated_by should contain the JWT sub claim identity")
 
 				ginkgo.By("waiting for cluster to reconcile before delete")
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 				ginkgo.By("deleting the cluster and verifying deleted_by")
 				deleted, err := h.Client.DeleteCluster(ctx, clusterID)
 				Expect(err).NotTo(HaveOccurred(), "cluster DELETE should succeed")
-				Expect(deleted.DeletedBy).NotTo(BeNil(), "deleted_by should be set on soft-delete")
-				Expect(*deleted.DeletedBy).To(Equal(expected),
+				Expect(deleted.DeletedBy).To(HaveValue(Equal(expected)),
 					"deleted_by should contain the JWT sub claim identity")
 			})
 
@@ -66,7 +64,7 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 				Expect(err).NotTo(HaveOccurred(), "crafting unconfigured-issuer JWT should succeed")
 
 				ginkgo.By("sending request with unconfigured issuer token")
-				resp, err := h.Client.GetClusters(ctx, nil, withBearerToken(token))
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, token)
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
@@ -88,14 +86,19 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 				audience := h.Cfg.Identity.TokenRequest.Audience
 				expiration := h.Cfg.Identity.TokenRequest.ExpirationSeconds
 
-				ginkgo.By("acquiring a token for a different service account")
+				ginkgo.By("provisioning the alternative service account")
+				Expect(h.EnsureServiceAccount(ctx, ns, altSAName)).To(Succeed(),
+					"provisioning alt SA should succeed (requires RBAC to create service accounts in %s)", ns)
+				ginkgo.DeferCleanup(func(cleanupCtx context.Context) {
+					_ = h.DeleteServiceAccount(cleanupCtx, ns, altSAName)
+				})
+
+				ginkgo.By("acquiring a token for the alternative service account")
 				altToken, err := h.K8sClient.CreateToken(ctx, ns, altSAName, audience, expiration)
-				if err != nil {
-					ginkgo.Skip(fmt.Sprintf("cannot acquire token for alt SA %s/%s (SA may not exist): %v", ns, altSAName, err))
-				}
+				Expect(err).NotTo(HaveOccurred(), "acquiring a token for the alt SA should succeed")
 
 				ginkgo.By("creating a cluster with the alternative SA token")
-				altClient, err := client.NewHyperFleetClient(h.Cfg.API.URL, nil, openapi.WithRequestEditorFn(withBearerToken(altToken)))
+				altClient, err := client.NewHyperFleetClient(h.Cfg.API.URL, nil, client.WithBearerToken(altToken))
 				Expect(err).NotTo(HaveOccurred(), "creating alt client should succeed")
 
 				cluster, err := altClient.CreateClusterFromPayload(ctx, h.TestDataPath("payloads/clusters/cluster-request.json"))
@@ -107,11 +110,36 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 
 				ginkgo.By("verifying audit field shows the alternative SA identity")
 				expectedAltIdentity := fmt.Sprintf("system:serviceaccount:%s:%s", ns, altSAName)
-				Expect(cluster.CreatedBy).To(Equal(expectedAltIdentity),
+				Expect(cluster.CreatedBy).To(HaveValue(Equal(expectedAltIdentity)),
 					"created_by should reflect the alternative SA identity, not the primary E2E SA")
 			})
 
-		ginkgo.It("confirms adapter identity is populated in cluster status reports",
+		ginkgo.It("rejects tokens with an incorrect audience with 401 and AUT-002",
+			func(ctx context.Context) {
+				if !h.Cfg.Identity.TokenRequest.IsEnabled() {
+					ginkgo.Skip("TokenRequest not configured - cannot mint a real token with a wrong audience")
+				}
+
+				ns := h.Cfg.Identity.TokenRequest.Namespace
+				saName := h.Cfg.Identity.TokenRequest.ServiceAccountName
+				expiration := h.Cfg.Identity.TokenRequest.ExpirationSeconds
+				wrongAudience := h.Cfg.Identity.TokenRequest.Audience + "-invalid"
+
+				ginkgo.By("minting a real token with an incorrect audience")
+				token, err := h.K8sClient.CreateToken(ctx, ns, saName, wrongAudience, expiration)
+				Expect(err).NotTo(HaveOccurred(), "acquiring a wrong-audience token should succeed")
+
+				ginkgo.By("sending request with the wrong-audience token")
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, token)
+				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
+				defer func() { _ = resp.Body.Close() }()
+
+				Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized),
+					"incorrect audience should return 401")
+				Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-002"))
+			})
+
+		ginkgo.It("confirms adapters authenticate with JWT when reporting cluster status",
 			func(ctx context.Context) {
 				ginkgo.By("creating a cluster and waiting for Reconciled")
 				clusterID, err := h.GetTestCluster(ctx, h.TestDataPath("payloads/clusters/cluster-request.json"))
@@ -120,17 +148,15 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 				h.DeferClusterCleanup(clusterID)
 
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
-				ginkgo.By("verifying adapter status reports have non-empty identity")
+				ginkgo.By("verifying adapter status reports were recorded")
 				statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 				Expect(err).NotTo(HaveOccurred(), "getting cluster statuses should succeed")
 				Expect(statuses.Items).NotTo(BeEmpty(), "at least one adapter should have reported")
 
-				// Adapter statuses are PUT by the adapter using its own SA token.
-				// We can't predict the exact adapter SA identity, but we can verify
-				// the status was created (CreatedTime is set), which proves the adapter
-				// successfully authenticated to the API with JWT.
+				// AdapterStatus has no audit-identity field, so this only proves the
+				// JWT-authenticated PUT was accepted, not which identity it used.
 				for _, status := range statuses.Items {
 					Expect(status.CreatedTime).NotTo(BeZero(),
 						"adapter %s status should have created_time set (proving JWT-authenticated PUT succeeded)",

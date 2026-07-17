@@ -6,30 +6,27 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 )
 
-// withoutAuth returns a RequestEditorFn that removes the Authorization header,
-// overriding any token the client would normally inject.
-func withoutAuth() openapi.RequestEditorFn {
-	return func(_ context.Context, req *http.Request) error {
-		req.Header.Del("Authorization")
-		return nil
-	}
-}
+const apiPrefix = "/api/hyperfleet/v1/"
 
-// withBearerToken returns a RequestEditorFn that replaces the Authorization
-// header with the given bearer token, overriding any token the client would
-// normally inject.
-func withBearerToken(token string) openapi.RequestEditorFn {
-	return func(_ context.Context, req *http.Request) error {
-		req.Header.Set("Authorization", "Bearer "+token)
-		return nil
+// rawRequest makes an HTTP request to the clusters API endpoint.
+// If token is non-empty, it's sent as a Bearer token; otherwise unauthenticated.
+func rawRequest(ctx context.Context, apiURL, method, token string) (*http.Response, error) {
+	fullURL := strings.TrimRight(apiURL, "/") + apiPrefix + "clusters"
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
 	}
+	req.Header.Set("Accept", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return (&http.Client{Timeout: 30 * time.Second}).Do(req)
 }
 
 // craftJWT creates a self-signed JWT with arbitrary claims, signed with a random RSA key.
@@ -49,6 +46,7 @@ func craftJWT(claims jwt.MapClaims) (string, error) {
 }
 
 // craftExpiredJWT creates a self-signed JWT that has already expired.
+// Random-key signed, so it can't isolate exp-checking from signature rejection (see AUT-002 note in jwt_enforcement.go).
 func craftExpiredJWT() (string, error) {
 	now := time.Now()
 	return craftJWT(jwt.MapClaims{
@@ -73,8 +71,8 @@ func craftInvalidSignatureJWT() (string, error) {
 	})
 }
 
-// craftUnconfiguredIssuerJWT creates a JWT with an issuer URL not in the API's
-// configured issuer list. The token is structurally valid but from an unknown issuer.
+// craftUnconfiguredIssuerJWT creates a JWT with an issuer URL not in the API's configured issuer list.
+// Random-key signed, so it can't isolate iss-checking from signature rejection either.
 func craftUnconfiguredIssuerJWT() (string, error) {
 	now := time.Now()
 	return craftJWT(jwt.MapClaims{

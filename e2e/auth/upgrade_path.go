@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -37,8 +36,8 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] JWT Upgrade Path Validation",
 				}
 
 				ginkgo.By("1. Verifying jwt.enabled=true: unauthenticated GET returns 401")
-				resp, err := h.Client.GetClusters(ctx, nil, withoutAuth())
-				Expect(err).NotTo(HaveOccurred())
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, "")
+				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 				Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized),
 					"jwt.enabled=true should enforce authentication - unauthenticated request must return 401")
@@ -51,12 +50,12 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] JWT Upgrade Path Validation",
 
 				h.DeferClusterCleanup(clusterID)
 
-				Expect(cluster.CreatedBy).To(Equal(expected),
+				Expect(cluster.CreatedBy).To(HaveValue(Equal(expected)),
 					"identity_claim=sub should resolve the configured service-account identity")
 
 				ginkgo.By("3. Verifying Sentinel auth: cluster reaches Reconciled")
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue),
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue),
 						"Sentinel must authenticate to API and publish events for cluster to reach Reconciled")
 
 				ginkgo.By("4. jwk_cert_ca_file validated implicitly: authenticated request above succeeded")

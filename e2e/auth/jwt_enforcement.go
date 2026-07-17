@@ -23,7 +23,7 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 		ginkgo.It("rejects GET request without Authorization header with 401 and AUT-001",
 			func(ctx context.Context) {
 				ginkgo.By("sending GET without Authorization header")
-				resp, err := h.Client.GetClusters(ctx, nil, withoutAuth())
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, "")
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
@@ -35,7 +35,7 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 		ginkgo.It("rejects POST request without Authorization header with 401 and AUT-001",
 			func(ctx context.Context) {
 				ginkgo.By("sending POST without Authorization header")
-				resp, err := h.Client.PostClusterWithBody(ctx, "application/json", nil, withoutAuth())
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodPost, "")
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
@@ -51,7 +51,7 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 				Expect(err).NotTo(HaveOccurred(), "crafting JWT should succeed")
 
 				ginkgo.By("sending GET with invalid-signature bearer token")
-				resp, err := h.Client.GetClusters(ctx, nil, withBearerToken(token))
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, token)
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
@@ -70,7 +70,7 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 				Expect(err).NotTo(HaveOccurred(), "crafting expired JWT should succeed")
 
 				ginkgo.By("sending GET with expired bearer token")
-				resp, err := h.Client.GetClusters(ctx, nil, withBearerToken(token))
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, token)
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
@@ -85,7 +85,7 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 		ginkgo.It("rejects requests with malformed token with 401",
 			func(ctx context.Context) {
 				ginkgo.By("sending GET with a non-JWT string as bearer token")
-				resp, err := h.Client.GetClusters(ctx, nil, withBearerToken("not-a-jwt"))
+				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, "not-a-jwt")
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 

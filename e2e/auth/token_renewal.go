@@ -6,13 +6,13 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
 )
 
 var _ = ginkgo.Describe("[Suite: auth][renewal] JWT Token Renewal",
+	ginkgo.Serial, // Serial: scales down sentinel replicas, blocking all concurrent specs
 	ginkgo.Label(labels.Tier1, labels.Auth, labels.Slow),
 	func() {
 		var h *helper.Helper
@@ -21,14 +21,13 @@ var _ = ginkgo.Describe("[Suite: auth][renewal] JWT Token Renewal",
 			h = helper.New()
 		})
 
-		// Token renewal is validated by triggering a second reconciliation cycle after the initial one.
-		// If Sentinel's or Adapter's token expired and renewal failed, the second cycle would fail
-		// because the component can't authenticate to the API. The test relies on the deployed
-		// tokenCacheTtl being short enough (or the projected volume rotation interval) that a token
-		// refresh occurs between the two reconciliation events.
-		//
-		// Note: this test is labeled Slow because it requires two full reconciliation cycles.
+		// sentinelSelector matches the Sentinel deployment(s), mirroring e2e/cluster/delete_edge_cases.go.
+		const sentinelSelector = "app.kubernetes.io/instance in (sentinel-clusters,clusters)"
+
+		// Restarting Sentinel between cycles forces a fresh token, so renewal is actually proven
+		// rather than assumed from tokenCacheTtl coincidentally lapsing during the test.
 		ginkgo.It("Sentinel continues publishing events across token refresh boundary",
+			ginkgo.Label(labels.Disruptive),
 			func(ctx context.Context) {
 				ginkgo.By("creating a cluster and waiting for initial Reconciled state")
 				cluster, err := h.Client.CreateClusterFromPayload(ctx, h.TestDataPath("payloads/clusters/cluster-request.json"))
@@ -39,12 +38,16 @@ var _ = ginkgo.Describe("[Suite: auth][renewal] JWT Token Renewal",
 				h.DeferClusterCleanup(clusterID)
 
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 				ginkgo.By("verifying cluster is at generation 1")
 				clusterBefore, err := h.Client.GetCluster(ctx, clusterID)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(clusterBefore.Generation).To(Equal(int32(1)))
+
+				ginkgo.By("restarting Sentinel to force a fresh token acquisition")
+				Expect(h.ScaleDeploymentBySelector(ctx, h.Cfg.Namespace, sentinelSelector, 0)).To(Succeed())
+				Expect(h.ScaleDeploymentBySelector(ctx, h.Cfg.Namespace, sentinelSelector, 1)).To(Succeed())
 
 				ginkgo.By("patching cluster to trigger new reconciliation (forces Sentinel to re-publish)")
 				patched, err := h.Client.PatchClusterFromPayload(ctx, clusterID, h.TestDataPath("payloads/clusters/cluster-patch.json"))
@@ -60,11 +63,10 @@ var _ = ginkgo.Describe("[Suite: auth][renewal] JWT Token Renewal",
 					c, err := h.Client.GetCluster(ctx, clusterID)
 					g.Expect(err).NotTo(HaveOccurred())
 					g.Expect(c.Generation).To(Equal(expectedGen))
-					g.Expect(c.Status).NotTo(BeNil())
 
 					found := false
 					for _, cond := range c.Status.Conditions {
-						if cond.Type == client.ConditionTypeReconciled && cond.Status == openapi.ResourceConditionStatusTrue {
+						if cond.Type == client.ConditionTypeReconciled && cond.Status == client.ResourceConditionStatusTrue {
 							found = true
 							g.Expect(cond.ObservedGeneration).To(Equal(expectedGen))
 						}
@@ -73,6 +75,8 @@ var _ = ginkgo.Describe("[Suite: auth][renewal] JWT Token Renewal",
 				}, h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).Should(Succeed())
 			})
 
+		// Unlike Sentinel, these adapters' deployment names aren't resolvable here, so this still
+		// relies on tokenCacheTtl/rotation lapsing naturally rather than a forced restart.
 		ginkgo.It("Adapter continues reporting status across token refresh boundary",
 			func(ctx context.Context) {
 				ginkgo.By("creating a cluster and waiting for initial Reconciled state")
@@ -82,7 +86,7 @@ var _ = ginkgo.Describe("[Suite: auth][renewal] JWT Token Renewal",
 				h.DeferClusterCleanup(clusterID)
 
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 				ginkgo.By("verifying at least one adapter has reported")
 				statusesBefore, err := h.Client.GetClusterStatuses(ctx, clusterID)

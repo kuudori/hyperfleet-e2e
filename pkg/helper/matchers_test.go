@@ -121,6 +121,12 @@ func TestHaveRFC9457Error(t *testing.T) {
 			actual:  "not-a-response",
 			wantErr: true,
 		},
+		{
+			name:    "nil response",
+			code:    "HYPERFLEET-AUT-001",
+			actual:  (*http.Response)(nil),
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -150,5 +156,3 @@ func TestHaveRFC9457Error(t *testing.T) {
 		})
 	}
 }
-
-func strPtr(s string) *string { return &s }
