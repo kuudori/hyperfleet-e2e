@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -125,12 +124,12 @@ var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework c
 					g.Expect(cluster.Status).NotTo(BeNil(), "cluster status should be present")
 
 					hasReconciledFalse := h.HasResourceCondition(cluster.Status.Conditions,
-						client.ConditionTypeReconciled, openapi.ResourceConditionStatusFalse)
+						client.ConditionTypeReconciled, client.ResourceConditionStatusFalse)
 					g.Expect(hasReconciledFalse).To(BeTrue(),
 						"initial cluster conditions should have Reconciled=False")
 
 					hasAvailableFalse := h.HasResourceCondition(cluster.Status.Conditions,
-						client.ConditionTypeLastKnownReconciled, openapi.ResourceConditionStatusFalse)
+						client.ConditionTypeLastKnownReconciled, client.ResourceConditionStatusFalse)
 					g.Expect(hasAvailableFalse).To(BeTrue(),
 						"initial cluster conditions should have LastKnownReconciled=False")
 				}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
@@ -143,7 +142,7 @@ var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework c
 					g.Expect(statuses.Items).NotTo(BeEmpty(), "adapter should have reported status")
 
 					// Find the test adapter status
-					var adapterStatus *openapi.AdapterStatus
+					var adapterStatus *client.AdapterStatus
 					for i, adapter := range statuses.Items {
 						if adapter.Adapter == adapterName {
 							adapterStatus = &statuses.Items[i]
@@ -163,7 +162,7 @@ var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework c
 						"adapter should have observed_generation=1")
 
 					// Find Available condition
-					var availableCondition *openapi.AdapterCondition
+					var availableCondition *client.AdapterCondition
 					for i, condition := range adapterStatus.Conditions {
 						if condition.Type == client.ConditionTypeAvailable {
 							availableCondition = &adapterStatus.Conditions[i]
@@ -175,7 +174,7 @@ var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework c
 						"adapter should have Available condition")
 
 					// Verify Available condition reports failure
-					g.Expect(availableCondition.Status).To(Equal(openapi.AdapterConditionStatusFalse),
+					g.Expect(availableCondition.Status).To(Equal(client.AdapterConditionStatusFalse),
 						"adapter Available condition should be False due to invalid K8s resource")
 
 					// Verify error details are present in reason and message
@@ -204,11 +203,11 @@ var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework c
 					g.Expect(cl.Status).NotTo(BeNil(), "cluster status should be present")
 
 					g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-						client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue)).To(BeTrue(),
+						client.ConditionTypeReconciled, client.ResourceConditionStatusTrue)).To(BeTrue(),
 						"cluster Reconciled should become True despite non-required adapter failure")
 
 					g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-						client.ConditionTypeLastKnownReconciled, openapi.ResourceConditionStatusTrue)).To(BeTrue(),
+						client.ConditionTypeLastKnownReconciled, client.ResourceConditionStatusTrue)).To(BeTrue(),
 						"cluster LastKnownReconciled should become True despite non-required adapter failure")
 				}, h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).Should(Succeed())
 

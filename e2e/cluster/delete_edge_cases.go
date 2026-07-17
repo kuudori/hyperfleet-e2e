@@ -8,7 +8,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -29,7 +28,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Re-DELETE Idempotency and API 
 			Expect(err).NotTo(HaveOccurred(), "failed to create cluster")
 
 			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should handle re-DELETE idempotently without changing deleted_time or generation",
@@ -93,13 +92,13 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] DELETE During Update Reconcili
 			clusterID = *cluster.Id
 
 			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should complete deletion when DELETE is sent during update reconciliation", func(ctx context.Context) {
 			ginkgo.By("sending PATCH to trigger generation 2 (do NOT wait for reconciliation)")
-			patchedCluster, err := h.Client.PatchCluster(ctx, clusterID, openapi.ClusterPatchRequest{
-				Spec: &openapi.ClusterSpec{"trigger-update": "true"},
+			patchedCluster, err := h.Client.PatchCluster(ctx, clusterID, client.ResourcePatchRequest{
+				Spec: map[string]any{"trigger-update": "true"},
 			})
 			Expect(err).NotTo(HaveOccurred(), "PATCH should succeed")
 			Expect(patchedCluster.Generation).To(Equal(int32(2)))
@@ -143,7 +142,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Recreate Cluster After Hard-De
 		var h *helper.Helper
 		var firstClusterID string
 		var secondClusterID string
-		var originalCluster *openapi.Cluster
+		var originalCluster *client.Resource
 
 		ginkgo.BeforeEach(func(ctx context.Context) {
 			h = helper.New()
@@ -156,7 +155,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Recreate Cluster After Hard-De
 			originalCluster = cluster
 
 			Eventually(h.PollCluster(ctx, firstClusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should create a new cluster with the same name after the original is hard-deleted", func(ctx context.Context) {
@@ -172,7 +171,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Recreate Cluster After Hard-De
 				Should(BeEmpty())
 
 			ginkgo.By("creating a new cluster with the same name")
-			newCluster, err := h.Client.CreateCluster(ctx, openapi.ClusterCreateRequest{
+			newCluster, err := h.Client.CreateCluster(ctx, client.ResourceCreateRequest{
 				Kind:   "Cluster",
 				Name:   originalCluster.Name,
 				Labels: originalCluster.Labels,
@@ -189,7 +188,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Recreate Cluster After Hard-De
 
 			ginkgo.By("waiting for the new cluster to reach Reconciled")
 			Eventually(h.PollCluster(ctx, secondClusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 			ginkgo.By("verifying the old cluster is still gone")
 			_, err = h.Client.GetCluster(ctx, firstClusterID)

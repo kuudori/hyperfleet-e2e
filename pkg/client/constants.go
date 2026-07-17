@@ -21,3 +21,12 @@ const (
 	ConditionTypeReconciled          = "Reconciled"          // Resource is reconciled
 	ConditionTypeLastKnownReconciled = "LastKnownReconciled" // API-computed aggregated condition (renamed from Available)
 )
+
+// Resource API paths.
+const (
+	ClustersPath   = "clusters"
+	NodepoolsPath  = "nodepools"
+	ChannelsPath   = "channels"
+	VersionsPath   = "versions"
+	WifConfigsPath = "wifconfigs"
+)

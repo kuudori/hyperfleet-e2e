@@ -5,37 +5,79 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
-
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 )
 
-// HyperFleetClient is a wrapper around the generated Client that provides
-// convenience methods and better error handling for E2E tests.
+// HyperFleetClient is the E2E test client for the HyperFleet API.
 type HyperFleetClient struct {
-	*openapi.Client              // Generated typed client for clusters/nodepools
-	httpClient      *http.Client // Raw HTTP client for generic resource requests
-	baseURL         string       // API base URL (no trailing slash)
+	httpClient *http.Client
+	baseURL    string
+}
+
+// ClientOption configures the HyperFleet client.
+type ClientOption func(*HyperFleetClient)
+
+// WithBearerToken returns a ClientOption that injects a JWT bearer token
+// into all outgoing requests via a custom round-tripper.
+func WithBearerToken(token string) ClientOption {
+	return func(c *HyperFleetClient) {
+		// baseURL is validated in NewHyperFleetClient, so Parse cannot fail here.
+		u, _ := url.Parse(c.baseURL)
+		host := u.Host
+		c.httpClient.Transport = &authTransport{
+			base:  c.httpClient.Transport,
+			token: token,
+			host:  host,
+		}
+	}
+}
+
+// authTransport injects an Authorization header into requests targeting the API host.
+// It does not attach the token to cross-origin redirects (CWE-200/CWE-522).
+type authTransport struct {
+	base  http.RoundTripper
+	token string
+	host  string
+}
+
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.Clone(req.Context())
+	if t.host == "" || r.URL.Host == t.host {
+		r.Header.Set("Authorization", "Bearer "+t.token)
+	}
+	base := t.base
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return base.RoundTrip(r)
 }
 
 // NewHyperFleetClient creates a new HyperFleet API client.
-func NewHyperFleetClient(baseURL string, httpClient *http.Client, opts ...openapi.ClientOption) (*HyperFleetClient, error) {
+func NewHyperFleetClient(baseURL string, httpClient *http.Client, opts ...ClientOption) (*HyperFleetClient, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	clientOpts := append([]openapi.ClientOption{openapi.WithHTTPClient(httpClient)}, opts...)
-	client, err := openapi.NewClient(baseURL, clientOpts...)
+	u, err := url.Parse(baseURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
+		return nil, fmt.Errorf("invalid base URL %q: %w", baseURL, err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return nil, fmt.Errorf("invalid base URL %q: scheme and host are required", baseURL)
 	}
 
-	return &HyperFleetClient{
-		Client:     client,
+	c := &HyperFleetClient{
 		httpClient: httpClient,
 		baseURL:    strings.TrimRight(baseURL, "/"),
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c, nil
 }
 
 // HTTPError represents an unexpected HTTP status code from the API.
@@ -52,8 +94,6 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("unexpected status code %d for %s", e.StatusCode, e.Action)
 }
 
-// handleHTTPResponse is a generic helper for processing HTTP responses.
-// It handles status code validation, response body decoding, and error formatting.
 func handleHTTPResponse[T any](resp *http.Response, expectedStatus int, action string) (*T, error) {
 	defer func() { _ = resp.Body.Close() }()
 
@@ -81,7 +121,6 @@ func handleHTTPResponse[T any](resp *http.Response, expectedStatus int, action s
 	return &result, nil
 }
 
-// handleHTTPNoBodyResponse validates the status code for responses with no body (e.g. 204).
 func handleHTTPNoBodyResponse(resp *http.Response, expectedStatus int, action string) error {
 	defer func() { _ = resp.Body.Close() }()
 

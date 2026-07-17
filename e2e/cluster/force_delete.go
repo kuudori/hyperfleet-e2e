@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -36,7 +35,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Force-Delete Cluster Stuck in 
 				h.DeferClusterCleanup(clusterID)
 
 				Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 				ginkgo.By("Create a nodepool and wait for Reconciled")
 				np, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, h.TestDataPath("payloads/nodepools/nodepool-request.json"))
@@ -45,7 +44,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Force-Delete Cluster Stuck in 
 				nodepoolID := *np.Id
 
 				Eventually(h.PollNodePool(ctx, clusterID, nodepoolID), h.Cfg.Timeouts.NodePool.Reconciled, h.Cfg.Polling.Interval).
-					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+					Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 				// --- Simulate stuck deletion by scaling down an existing cluster adapter ---
 
@@ -80,7 +79,7 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] Force-Delete Cluster Stuck in 
 					g.Expect(err).NotTo(HaveOccurred(), "cluster should still be accessible")
 					g.Expect(cl.DeletedTime).NotTo(BeNil(), "cluster should still be soft-deleted")
 					g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-						client.ConditionTypeReconciled, openapi.ResourceConditionStatusFalse)).To(BeTrue(),
+						client.ConditionTypeReconciled, client.ResourceConditionStatusFalse)).To(BeTrue(),
 						"Reconciled should be False while stuck")
 				}, h.Cfg.Timeouts.Adapter.Processing/2, h.Cfg.Polling.Interval).Should(Succeed())
 

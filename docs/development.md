@@ -77,7 +77,6 @@ import (
     "github.com/onsi/ginkgo/v2"
     . "github.com/onsi/gomega"
 
-    "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
     "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
     "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
     "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -108,7 +107,7 @@ var _ = ginkgo.Describe(testName,
 
             ginkgo.By("waiting for cluster to become Reconciled")
             Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-                Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+                Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
         })
     },
 )
@@ -222,7 +221,7 @@ Expect(cluster.Generation).To(Equal(int32(1)))
 
 // Async: use pollers + custom matchers (preferred)
 Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 // Async: use func(g Gomega) for complex one-off assertions
 Eventually(func(g Gomega) {
@@ -243,11 +242,11 @@ The framework uses **pollers** (functions that fetch current state) and **custom
 ```go
 // Cluster
 Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 // NodePool (same matcher, different poller)
 Eventually(h.PollNodePool(ctx, clusterID, npID), h.Cfg.Timeouts.NodePool.Reconciled, h.Cfg.Polling.Interval).
-    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 ```
 
 ### Wait for Adapter Conditions
@@ -255,7 +254,7 @@ Eventually(h.PollNodePool(ctx, clusterID, npID), h.Cfg.Timeouts.NodePool.Reconci
 ```go
 // All adapters finalized
 Eventually(h.PollClusterAdapterStatuses(ctx, clusterID), timeout, h.Cfg.Polling.Interval).
-    Should(helper.HaveAllAdaptersWithCondition(h.Cfg.Adapters.Cluster, client.ConditionTypeFinalized, openapi.AdapterConditionStatusTrue))
+    Should(helper.HaveAllAdaptersWithCondition(h.Cfg.Adapters.Cluster, client.ConditionTypeFinalized, client.AdapterConditionStatusTrue))
 
 // All adapters at a specific generation with Applied+Available+Health=True
 Eventually(h.PollClusterAdapterStatuses(ctx, clusterID), timeout, h.Cfg.Polling.Interval).
@@ -272,10 +271,10 @@ Eventually(h.PollClusterHTTPStatus(ctx, clusterID), timeout, h.Cfg.Polling.Inter
 ### Check Conditions Synchronously
 
 ```go
-hasReconciled := h.HasResourceCondition(cluster.Status.Conditions, client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue)
+hasReconciled := h.HasResourceCondition(cluster.Status.Conditions, client.ConditionTypeReconciled, client.ResourceConditionStatusTrue)
 Expect(hasReconciled).To(BeTrue())
 
-hasApplied := h.HasAdapterCondition(adapter.Conditions, client.ConditionTypeApplied, openapi.AdapterConditionStatusTrue)
+hasApplied := h.HasAdapterCondition(adapter.Conditions, client.ConditionTypeApplied, client.AdapterConditionStatusTrue)
 Expect(hasApplied).To(BeTrue())
 ```
 
@@ -351,7 +350,7 @@ Expect(err).NotTo(HaveOccurred())
 
 ```go
 Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+    Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 ```
 
 ### Wait for All Adapters at Generation
@@ -368,9 +367,9 @@ statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 Expect(err).NotTo(HaveOccurred())
 
 for _, adapter := range statuses.Items {
-    Expect(h.HasAdapterCondition(adapter.Conditions, client.ConditionTypeApplied, openapi.AdapterConditionStatusTrue)).To(BeTrue(),
+    Expect(h.HasAdapterCondition(adapter.Conditions, client.ConditionTypeApplied, client.AdapterConditionStatusTrue)).To(BeTrue(),
         "adapter %s should have Applied=True", adapter.Adapter)
-    Expect(h.HasAdapterCondition(adapter.Conditions, client.ConditionTypeAvailable, openapi.AdapterConditionStatusTrue)).To(BeTrue(),
+    Expect(h.HasAdapterCondition(adapter.Conditions, client.ConditionTypeAvailable, client.AdapterConditionStatusTrue)).To(BeTrue(),
         "adapter %s should have Available=True", adapter.Adapter)
 }
 ```

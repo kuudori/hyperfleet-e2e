@@ -3,7 +3,8 @@ package helper
 import (
 	"testing"
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/util"
+
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 )
 
@@ -18,28 +19,13 @@ func TestHaveAuditIdentity(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name:      "Cluster with matching identity",
-			actual:    &openapi.Cluster{CreatedBy: expected},
-			wantMatch: true,
-		},
-		{
-			name:      "Cluster with mismatched identity",
-			actual:    &openapi.Cluster{CreatedBy: other},
-			wantMatch: false,
-		},
-		{
-			name:    "nil *Cluster",
-			actual:  (*openapi.Cluster)(nil),
-			wantErr: true,
-		},
-		{
 			name:      "Resource with matching identity",
-			actual:    &client.Resource{CreatedBy: strPtr(expected)},
+			actual:    &client.Resource{CreatedBy: util.ToPtr(expected)},
 			wantMatch: true,
 		},
 		{
 			name:      "Resource with mismatched identity",
-			actual:    &client.Resource{CreatedBy: strPtr(other)},
+			actual:    &client.Resource{CreatedBy: util.ToPtr(other)},
 			wantMatch: false,
 		},
 		{
@@ -86,5 +72,3 @@ func TestHaveAuditIdentity(t *testing.T) {
 		})
 	}
 }
-
-func strPtr(s string) *string { return &s }

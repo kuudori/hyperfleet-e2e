@@ -7,7 +7,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -198,7 +197,7 @@ func verifyClusterNotReconciled(ctx context.Context, h *helper.Helper, clusterID
 		g.Expect(cl.Status).NotTo(BeNil(), "cluster status should be present")
 
 		g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-			client.ConditionTypeReconciled, openapi.ResourceConditionStatusFalse)).To(BeTrue(),
+			client.ConditionTypeReconciled, client.ResourceConditionStatusFalse)).To(BeTrue(),
 			"cluster Reconciled condition should remain False while crash-adapter is unavailable")
 	}, h.Cfg.Polling.Interval*3, h.Cfg.Polling.Interval).Should(Succeed())
 }
@@ -209,7 +208,7 @@ func verifyAdapterRecovery(ctx context.Context, h *helper.Helper, clusterID, ada
 		statuses, err := h.Client.GetClusterStatuses(ctx, clusterID)
 		g.Expect(err).NotTo(HaveOccurred(), "failed to get cluster statuses")
 
-		var adapterStatus *openapi.AdapterStatus
+		var adapterStatus *client.AdapterStatus
 		for i, status := range statuses.Items {
 			if status.Adapter == adapterName {
 				adapterStatus = &statuses.Items[i]
@@ -220,15 +219,15 @@ func verifyAdapterRecovery(ctx context.Context, h *helper.Helper, clusterID, ada
 			"crash-adapter should be present in statuses after recovery")
 
 		g.Expect(h.HasAdapterCondition(adapterStatus.Conditions,
-			client.ConditionTypeApplied, openapi.AdapterConditionStatusTrue)).To(BeTrue(),
+			client.ConditionTypeApplied, client.AdapterConditionStatusTrue)).To(BeTrue(),
 			"crash-adapter should have Applied=True after recovery")
 
 		g.Expect(h.HasAdapterCondition(adapterStatus.Conditions,
-			client.ConditionTypeAvailable, openapi.AdapterConditionStatusTrue)).To(BeTrue(),
+			client.ConditionTypeAvailable, client.AdapterConditionStatusTrue)).To(BeTrue(),
 			"crash-adapter should have Available=True after recovery")
 
 		g.Expect(h.HasAdapterCondition(adapterStatus.Conditions,
-			client.ConditionTypeHealth, openapi.AdapterConditionStatusTrue)).To(BeTrue(),
+			client.ConditionTypeHealth, client.AdapterConditionStatusTrue)).To(BeTrue(),
 			"crash-adapter should have Health=True after recovery")
 
 		g.Expect(adapterStatus.ObservedGeneration).To(Equal(int32(1)),
@@ -244,11 +243,11 @@ func verifyClusterReconciled(ctx context.Context, h *helper.Helper, clusterID st
 		g.Expect(cl.Status).NotTo(BeNil(), "cluster status should be present")
 
 		g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-			client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue)).To(BeTrue(),
+			client.ConditionTypeReconciled, client.ResourceConditionStatusTrue)).To(BeTrue(),
 			"cluster Reconciled condition should transition to True")
 
 		g.Expect(h.HasResourceCondition(cl.Status.Conditions,
-			client.ConditionTypeLastKnownReconciled, openapi.ResourceConditionStatusTrue)).To(BeTrue(),
+			client.ConditionTypeLastKnownReconciled, client.ResourceConditionStatusTrue)).To(BeTrue(),
 			"cluster LastKnownReconciled condition should transition to True")
 	}, h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).Should(Succeed())
 }

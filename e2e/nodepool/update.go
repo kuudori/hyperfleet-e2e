@@ -6,7 +6,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -34,7 +33,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][update] NodePool Update Lifecycle",
 			})
 
 			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 
 			ginkgo.By("creating nodepool and waiting for Reconciled at generation 1")
 			np, err := h.Client.CreateNodePoolFromPayload(ctx, clusterID, h.TestDataPath("payloads/nodepools/nodepool-request.json"))
@@ -43,7 +42,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][update] NodePool Update Lifecycle",
 			nodepoolID = *np.Id
 
 			Eventually(h.PollNodePool(ctx, clusterID, nodepoolID), h.Cfg.Timeouts.NodePool.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should update nodepool via PATCH, trigger reconciliation, and reach Reconciled at new generation", func(ctx context.Context) {
@@ -75,7 +74,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][update] NodePool Update Lifecycle",
 
 				found := false
 				for _, cond := range finalNP.Status.Conditions {
-					if cond.Type == client.ConditionTypeReconciled && cond.Status == openapi.ResourceConditionStatusTrue {
+					if cond.Type == client.ConditionTypeReconciled && cond.Status == client.ResourceConditionStatusTrue {
 						found = true
 						g.Expect(cond.ObservedGeneration).To(Equal(expectedGen), "Reconciled condition observed_generation should match expected")
 					}
@@ -88,7 +87,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][update] NodePool Update Lifecycle",
 			Expect(err).NotTo(HaveOccurred())
 			Expect(parentCluster.Generation).To(Equal(parentBefore.Generation), "nodepool update should not affect cluster generation")
 
-			Expect(parentCluster).To(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue),
+			Expect(parentCluster).To(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue),
 				"parent cluster should remain Reconciled=True")
 		})
 

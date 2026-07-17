@@ -2,12 +2,12 @@ package cluster
 
 import (
 	"context"
+	"net/url"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -36,11 +36,9 @@ var _ = ginkgo.Describe("[Suite: cluster][perf] API list latency with filters an
 
 		ginkgo.It("should list clusters with search filter within acceptable latency", func(ctx context.Context) {
 			ginkgo.By("measuring GET /clusters?search=... response time")
-			filter := openapi.SearchParams("labels.environment='test'")
+			filter := "labels.environment='test'"
 			start := time.Now()
-			_, err := h.Client.ListClustersWithParams(ctx, &openapi.GetClustersParams{
-				Search: &filter,
-			})
+			_, err := h.Client.ListClustersWithParams(ctx, url.Values{"search": {filter}})
 			Expect(err).NotTo(HaveOccurred())
 			elapsed := time.Since(start)
 			ginkgo.GinkgoWriter.Printf("[PERF] GET /clusters (search filter) latency: %v\n", elapsed)
@@ -50,11 +48,8 @@ var _ = ginkgo.Describe("[Suite: cluster][perf] API list latency with filters an
 
 		ginkgo.It("should list clusters with page size limit within acceptable latency", func(ctx context.Context) {
 			ginkgo.By("measuring GET /clusters?size=10 response time")
-			size := openapi.QueryParamsSize(10)
 			start := time.Now()
-			_, err := h.Client.ListClustersWithParams(ctx, &openapi.GetClustersParams{
-				Size: &size,
-			})
+			_, err := h.Client.ListClustersWithParams(ctx, url.Values{"size": {"10"}})
 			Expect(err).NotTo(HaveOccurred())
 			elapsed := time.Since(start)
 			ginkgo.GinkgoWriter.Printf("[PERF] GET /clusters (size=10) latency: %v\n", elapsed)
@@ -64,13 +59,8 @@ var _ = ginkgo.Describe("[Suite: cluster][perf] API list latency with filters an
 
 		ginkgo.It("should list clusters with pagination within acceptable latency", func(ctx context.Context) {
 			ginkgo.By("measuring GET /clusters?page=1&size=10 response time")
-			page := openapi.QueryParamsPage(1)
-			size := openapi.QueryParamsSize(10)
 			start := time.Now()
-			_, err := h.Client.ListClustersWithParams(ctx, &openapi.GetClustersParams{
-				Page: &page,
-				Size: &size,
-			})
+			_, err := h.Client.ListClustersWithParams(ctx, url.Values{"page": {"1"}, "size": {"10"}})
 			Expect(err).NotTo(HaveOccurred())
 			elapsed := time.Since(start)
 			ginkgo.GinkgoWriter.Printf("[PERF] GET /clusters (page=1, size=10) latency: %v\n", elapsed)

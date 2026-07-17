@@ -6,7 +6,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/api/openapi"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -28,25 +27,25 @@ var _ = ginkgo.Describe("[Suite: cluster][update] Rapid Update Coalescing",
 			clusterID = *cluster.Id
 
 			Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
-				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, openapi.ResourceConditionStatusTrue))
+				Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))
 		})
 
 		ginkgo.It("should coalesce multiple rapid updates and reconcile to the latest generation", func(ctx context.Context) {
 			ginkgo.By("sending three PATCH requests in rapid succession")
-			patch1, err := h.Client.PatchCluster(ctx, clusterID, openapi.ClusterPatchRequest{
-				Spec: &openapi.ClusterSpec{"update": "first"},
+			patch1, err := h.Client.PatchCluster(ctx, clusterID, client.ResourcePatchRequest{
+				Spec: map[string]any{"update": "first"},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(patch1.Generation).To(Equal(int32(2)))
 
-			patch2, err := h.Client.PatchCluster(ctx, clusterID, openapi.ClusterPatchRequest{
-				Spec: &openapi.ClusterSpec{"update": "second"},
+			patch2, err := h.Client.PatchCluster(ctx, clusterID, client.ResourcePatchRequest{
+				Spec: map[string]any{"update": "second"},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(patch2.Generation).To(Equal(int32(3)))
 
-			patch3, err := h.Client.PatchCluster(ctx, clusterID, openapi.ClusterPatchRequest{
-				Spec: &openapi.ClusterSpec{"update": "third"},
+			patch3, err := h.Client.PatchCluster(ctx, clusterID, client.ResourcePatchRequest{
+				Spec: map[string]any{"update": "third"},
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(patch3.Generation).To(Equal(int32(4)))
@@ -63,7 +62,7 @@ var _ = ginkgo.Describe("[Suite: cluster][update] Rapid Update Coalescing",
 
 				found := false
 				for _, cond := range finalCluster.Status.Conditions {
-					if cond.Type == client.ConditionTypeReconciled && cond.Status == openapi.ResourceConditionStatusTrue {
+					if cond.Type == client.ConditionTypeReconciled && cond.Status == client.ResourceConditionStatusTrue {
 						found = true
 						g.Expect(cond.ObservedGeneration).To(Equal(int32(4)))
 					}

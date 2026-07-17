@@ -118,7 +118,7 @@ make test        # Run unit tests
 make e2e         # Run E2E tests
 make list-tests  # List tests by tier (dry-run, no API required)
 make lint        # Run linter
-make generate    # Regenerate OpenAPI client
+make check       # Run all checks (fmt, vet, lint, test)
 ```
 
 ## Troubleshooting

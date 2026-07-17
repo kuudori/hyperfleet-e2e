@@ -54,8 +54,3 @@ perf/results/
 # Claude Code files
 .claude/
 
-# Generated code
-pkg/api/openapi/
-
-# Downloaded from hyperfleet-api during make generate
-openapi/openapi.yaml
