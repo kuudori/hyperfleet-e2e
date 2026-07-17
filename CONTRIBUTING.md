@@ -36,7 +36,7 @@ Thank you for contributing to HyperFleet E2E! This document provides guidelines 
 
 ## Repository Structure
 
-```
+```text
 hyperfleet-e2e/
 ├── cmd/              - CLI entry point
 │   └── hyperfleet-e2e/

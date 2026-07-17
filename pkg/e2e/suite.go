@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"context"
 	"log"
 
 	"github.com/onsi/ginkgo/v2"
@@ -28,7 +27,7 @@ func GetSuiteConfig() *config.Config {
 	return suiteConfig
 }
 
-var _ = ginkgo.BeforeSuite(func() {
+var _ = ginkgo.BeforeSuite(func(ctx ginkgo.SpecContext) {
 	cfg := GetSuiteConfig()
 	if cfg == nil {
 		log.Fatalf("Suite config not initialized")
@@ -47,7 +46,7 @@ var _ = ginkgo.BeforeSuite(func() {
 			log.Fatalf("Failed to create K8s client for token acquisition: %v", err)
 		}
 		token, err := k8s.CreateToken(
-			context.Background(),
+			ctx,
 			cfg.Identity.TokenRequest.Namespace,
 			cfg.Identity.TokenRequest.ServiceAccountName,
 			cfg.Identity.TokenRequest.Audience,

@@ -71,7 +71,7 @@ func (c *HyperFleetClient) GetNodePoolStatuses(ctx context.Context, clusterID, n
 func (c *HyperFleetClient) ForceDeleteNodePool(ctx context.Context, clusterID, nodepoolID, reason string) error {
 	logger.Info("force-deleting nodepool", "cluster_id", clusterID, "nodepool_id", nodepoolID, "reason", reason)
 	if err := c.ForceDeleteResource(ctx, ClustersPath+"/"+clusterID+"/"+NodepoolsPath+"/"+nodepoolID, reason); err != nil {
-		return err
+		return fmt.Errorf("force-delete nodepool %s in cluster %s: %w", nodepoolID, clusterID, err)
 	}
 	logger.Info("nodepool force-deleted", "cluster_id", clusterID, "nodepool_id", nodepoolID)
 	return nil

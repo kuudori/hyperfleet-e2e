@@ -5,7 +5,7 @@ func ToPtr[T any](x T) *T {
 	return &x
 }
 
-// FromPtr returns the pointer value or empty.
+// FromPtr returns the pointer value or the zero value for the type.
 func FromPtr[T any](x *T) T {
 	if x == nil {
 		var zero T

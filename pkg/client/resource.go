@@ -227,7 +227,7 @@ func (c *HyperFleetClient) GetResourceStatuses(ctx context.Context, path string)
 }
 
 func (c *HyperFleetClient) ForceDeleteResource(ctx context.Context, path string, reason string) error {
-	resp, err := c.doJSON(ctx, http.MethodDelete, path+"/force", ForceDeleteRequest{Reason: reason})
+	resp, err := c.doJSON(ctx, http.MethodPost, path+"/force-delete", ForceDeleteRequest{Reason: reason})
 	if err != nil {
 		return fmt.Errorf("force-delete resource at %s: %w", path, err)
 	}
@@ -268,5 +268,9 @@ func (c *HyperFleetClient) doJSON(ctx context.Context, method, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	return c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: %w", method, fullURL, err)
+	}
+	return resp, nil
 }

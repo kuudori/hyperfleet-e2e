@@ -23,11 +23,9 @@ type ClientOption func(*HyperFleetClient)
 // into all outgoing requests via a custom round-tripper.
 func WithBearerToken(token string) ClientOption {
 	return func(c *HyperFleetClient) {
+		// baseURL is validated in NewHyperFleetClient, so Parse cannot fail here.
 		u, _ := url.Parse(c.baseURL)
-		var host string
-		if u != nil {
-			host = u.Host
-		}
+		host := u.Host
 		c.httpClient.Transport = &authTransport{
 			base:  c.httpClient.Transport,
 			token: token,
@@ -60,6 +58,14 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func NewHyperFleetClient(baseURL string, httpClient *http.Client, opts ...ClientOption) (*HyperFleetClient, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid base URL %q: %w", baseURL, err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return nil, fmt.Errorf("invalid base URL %q: scheme and host are required", baseURL)
 	}
 
 	c := &HyperFleetClient{
