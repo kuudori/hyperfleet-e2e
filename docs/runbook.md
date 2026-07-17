@@ -36,19 +36,9 @@ The environment guide covers:
 
 ## Running E2E Tests
 
-### Build the E2E Binary
-
-```bash
-# Generate API client from OpenAPI spec and build
-make build
-
-# Verify the build
-./bin/hyperfleet-e2e --help
-```
-
 ### Run Tests
 
-Make sure you've set the required environment variables from the [Prerequisites](#prerequisites) section:
+Tests run in parallel by default using the ginkgo CLI (4 processes). Make sure you've set the required environment variables from the [Prerequisites](#prerequisites) section:
 
 - `HYPERFLEET_API_URL`
 - `MAESTRO_URL`
@@ -57,43 +47,40 @@ Make sure you've set the required environment variables from the [Prerequisites]
 **Run tests by tier:**
 
 ```bash
-# Run tier0 tests (critical path)
-./bin/hyperfleet-e2e test --label-filter=tier0
+# Run tier0 tests (critical path, 4 parallel processes)
+make e2e GINKGO_LABEL_FILTER=tier0
 
 # Run tier1 tests (important features)
-./bin/hyperfleet-e2e test --label-filter=tier1
+make e2e GINKGO_LABEL_FILTER=tier1
 
 # Run tier2 tests (edge cases - requires sourcing env/env.local first)
-source env/env.local && ./bin/hyperfleet-e2e test --label-filter=tier2
+source env/env.local && make e2e GINKGO_LABEL_FILTER=tier2
 ```
 
 **Run tests by suite:**
 
 ```bash
 # Run all cluster tests
-./bin/hyperfleet-e2e test --focus "\[Suite: cluster\]"
+make e2e GINKGO_FOCUS="\[Suite: cluster\]"
 
 # Run all nodepool tests
-./bin/hyperfleet-e2e test --focus "\[Suite: nodepool\]"
-
-# Run all adapter tests
-./bin/hyperfleet-e2e test --focus "\[Suite: adapter\]"
+make e2e GINKGO_FOCUS="\[Suite: nodepool\]"
 ```
 
-**Run specific tests by description:**
+**Control parallelism:**
 
 ```bash
-./bin/hyperfleet-e2e test --focus "Create Cluster via API"
+# Run single-process (useful for debugging)
+make e2e PROCS=1 GINKGO_LABEL_FILTER=tier0
+
+# Run with 8 processes
+make e2e PROCS=8 GINKGO_LABEL_FILTER=tier0
 ```
 
-**View available options:**
+**CI mode** (JUnit output, flake retries):
 
 ```bash
-# Show all commands
-./bin/hyperfleet-e2e --help
-
-# Show test command options
-./bin/hyperfleet-e2e test --help
+make e2e-ci GINKGO_LABEL_FILTER=tier0
 ```
 
 ## Troubleshooting
@@ -220,7 +207,7 @@ Unexpected error:
 
 ## CI Jobs
 
-The test cases you run locally are automatically picked up and executed in nightly CI jobs to ensure continuous validation of the system.
+The test cases you run locally are automatically picked up and executed in nightly CI jobs to ensure continuous validation of the system. CI runs use `make e2e-ci` with `PROCS=4` (parallel via ginkgo CLI), JUnit output, and flake retries.
 
 **Job Configuration:** [openshift-hyperfleet-hyperfleet-e2e-main__e2e.yaml](https://github.com/openshift/release/blob/main/ci-operator/config/openshift-hyperfleet/hyperfleet-e2e/openshift-hyperfleet-hyperfleet-e2e-main__e2e.yaml)
 

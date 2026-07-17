@@ -74,20 +74,17 @@ The framework:
 ## Running Specific Tests
 
 ```bash
-# Run critical tests only
-./bin/hyperfleet-e2e test --label-filter=tier0
+# Run critical tests only (parallel, 4 procs by default)
+make e2e GINKGO_LABEL_FILTER=tier0
 
 # Run important features
-./bin/hyperfleet-e2e test --label-filter=tier1
-
-# Run edge cases (requires sourcing env/env.local first)
-source env/env.local && ./bin/hyperfleet-e2e test --label-filter=tier2
-
-# Run all cluster suite tests
-./bin/hyperfleet-e2e test --focus "\[Suite: cluster\]"
+make e2e GINKGO_LABEL_FILTER=tier1
 
 # Run cluster tier0 tests only
-./bin/hyperfleet-e2e test --label-filter="tier0" --focus "\[Suite: cluster\]"
+make e2e GINKGO_LABEL_FILTER=tier0 GINKGO_FOCUS="\[Suite: cluster\]"
+
+# Run single-process (useful for debugging)
+make e2e PROCS=1 GINKGO_LABEL_FILTER=tier0
 
 # Deep debug mode (add API calls and framework internals)
 ./bin/hyperfleet-e2e test --log-level=debug
@@ -115,7 +112,8 @@ make list-tests
 ```bash
 make build       # Build binary
 make test        # Run unit tests
-make e2e         # Run E2E tests
+make e2e         # Run E2E tests in parallel (PROCS=4 by default)
+make e2e-ci      # Run E2E tests for CI (parallel + JUnit + flake retries)
 make list-tests  # List tests by tier (dry-run, no API required)
 make lint        # Run linter
 make check       # Run all checks (fmt, vet, lint, test)

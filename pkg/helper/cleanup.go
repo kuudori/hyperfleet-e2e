@@ -17,13 +17,11 @@ import (
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/logger"
 )
 
-var (
-	AppliedManifestWorksGVR = &schema.GroupVersionResource{
-		Group:    "work.open-cluster-management.io",
-		Version:  "v1",
-		Resource: "appliedmanifestworks",
-	}
-)
+var AppliedManifestWorksGVR = &schema.GroupVersionResource{
+	Group:    "work.open-cluster-management.io",
+	Version:  "v1",
+	Resource: "appliedmanifestworks",
+}
 
 type CleanupHelper struct {
 	cfg                      *config.Config
@@ -63,12 +61,36 @@ func NewCleanupHelper() (*CleanupHelper, error) {
 	return &CleanupHelper{k8sClient: k8sClient, dynamicClient: dynamicClient, labelSelectorListOptions: labelSelectorListOptions, cfg: cfg, adapterDeploymentList: adapterDeploymentList}, nil
 }
 
-// CleanupResources is the entry point for the end-of-suite cleanup mechanism that does a final sweep
-// Using the label selector = e2e.hyperfleet.io/run-id=<run-id> that is set when the tests are initiated
-func CleanupResources() {
+// CleanupPubSubResources sweeps Pub/Sub topics and subscriptions created by adapters
+// deployed during this process's test execution. Safe to call from every Ginkgo process
+// since each process tracks its own AdapterDeploymentList in memory.
+func CleanupPubSubResources() {
 	c, err := NewCleanupHelper()
 	if err != nil {
-		logger.Error("failed to create cleanup helper", "error", err)
+		logger.Error("failed to create cleanup helper for Pub/Sub sweep", "error", err)
+		return
+	}
+
+	if c.cfg.BrokerType != "googlepubsub" {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	if err := c.SweepPubsubTestAdapterResources(ctx); err != nil {
+		logger.Error("failed to cleanup Pub/Sub test resources", "error", err)
+	}
+}
+
+// CleanupKubeResources sweeps Helm releases and K8s resources labeled with the suite
+// run-id. In parallel mode this MUST run exactly once, after all processes finish
+// (via SynchronizedAfterSuite's final closure), to avoid sweeping resources belonging
+// to specs still running on other processes.
+func CleanupKubeResources() {
+	c, err := NewCleanupHelper()
+	if err != nil {
+		logger.Error("failed to create cleanup helper for K8s sweep", "error", err)
 		return
 	}
 
@@ -97,13 +119,6 @@ func CleanupResources() {
 	// Step 2: Sweep resources that contain the given label selector
 	if err := c.SweepLabeledResources(ctx); err != nil {
 		logger.Error("failed to cleanup test resources", "error", err)
-	}
-
-	// Step 3: Sweep Pub/Sub test adapter resources
-	if c.cfg.BrokerType == "googlepubsub" {
-		if err := c.SweepPubsubTestAdapterResources(ctx); err != nil {
-			logger.Error("failed to cleanup Pub/Sub test resources", "error", err)
-		}
 	}
 
 	logger.Info("test resources cleaned up")
@@ -175,7 +190,6 @@ func (c *CleanupHelper) SweepLabeledResources(ctx context.Context) error {
 		logger.Info("resources still being deleted", "remaining", remaining)
 		return false, nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("not all resources were deleted in time: %w", err)
 	}

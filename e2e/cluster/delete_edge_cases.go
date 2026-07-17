@@ -14,6 +14,7 @@ import (
 )
 
 var _ = ginkgo.Describe("[Suite: cluster][delete] Re-DELETE Idempotency and API Boundary Tests",
+	ginkgo.Serial, // Serial: scales down sentinel replicas, blocking all concurrent specs
 	ginkgo.Label(labels.Tier1),
 	func() {
 		var h *helper.Helper

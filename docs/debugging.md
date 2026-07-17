@@ -149,7 +149,11 @@ JSON is the team-standard format for production components. For local debugging,
 ### Enabling Debug Output
 
 ```bash
+# Parallel (default)
 make e2e HYPERFLEET_LOG_LEVEL=debug HYPERFLEET_LOG_FORMAT=json
+
+# Single-process (easier to read interleaved output)
+make e2e PROCS=1 HYPERFLEET_LOG_LEVEL=debug HYPERFLEET_LOG_FORMAT=json
 ```
 
 ### Correlating Test Logs with Component Logs
@@ -267,7 +271,7 @@ If tests timeout waiting for an adapter, verify the Sentinel is publishing event
 HYPERFLEET_TIMEOUTS_CLUSTER_RECONCILED=45m \
 HYPERFLEET_TIMEOUTS_ADAPTER_PROCESSING=10m \
 HYPERFLEET_POLLING_INTERVAL=5s \
-make e2e
+make e2e PROCS=1 GINKGO_FOCUS="Your Test Description"
 ```
 
 ---
@@ -467,6 +471,7 @@ This is the most common failure. Follow the [Investigating a Stuck Adapter](#inv
 
 Common flakiness sources:
 
+- **Parallelism-induced failures:** Tests run across 4 ginkgo processes by default. To isolate whether a failure is parallelism-related, reproduce with `make e2e PROCS=1 GINKGO_FOCUS="failing test"`. If it passes with `PROCS=1` but fails with `PROCS=4`, the test has a shared-state or resource-collision issue.
 - **Race conditions in concurrent tests:** Ensure goroutines use `sync.WaitGroup` and call `ginkgo.GinkgoRecover()`. Collect all resource IDs before assertions so cleanup runs even if assertions fail.
 - **Timing sensitivity:** If the test polls faster than the system can process, it may catch intermediate states. Use appropriate `Eventually` timeouts and polling intervals.
 - **Resource name collisions:** Test-generated resource names should include unique identifiers (timestamps, random suffixes) to prevent conflicts between parallel runs.

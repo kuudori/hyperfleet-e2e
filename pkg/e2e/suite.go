@@ -69,8 +69,18 @@ var _ = ginkgo.BeforeSuite(func(ctx ginkgo.SpecContext) {
 	logger.Info("starting hyperfleet-e2e test suite - each test creates temporary resources")
 })
 
-var _ = ginkgo.AfterSuite(func() {
-	helper.CleanupResources()
-	helper.ClearSuiteConfig()
-	logger.Info("test suite completed")
-})
+var _ = ginkgo.SynchronizedAfterSuite(
+	// Per-process: sweep Pub/Sub resources. Safe to call from every process
+	// since each tracks its own AdapterDeploymentList in memory.
+	func() {
+		helper.CleanupPubSubResources()
+	},
+	// Process 1 only, after all processes finish: sweep Helm releases and labeled K8s
+	// resources. Running this once prevents sweeping resources that belong to specs still
+	// executing on other processes.
+	func() {
+		helper.CleanupKubeResources()
+		helper.ClearSuiteConfig()
+		logger.Info("test suite completed")
+	},
+)

@@ -50,7 +50,7 @@ Pre-flight order: `make check` then `make build`.
 
 ### File naming and structure
 
-- **IMPORTANT:** Test files use `.go` extension, NOT `_test.go`. E2E tests are compiled into the binary, not run via `go test`.
+- **IMPORTANT:** Test files use `.go` extension, NOT `_test.go`. E2E tests are compiled into the binary, not run via `go test`. The single exception is `e2e/e2e_suite_test.go` - the ginkgo CLI entry point for parallel execution (`make e2e-ci`); never add spec code there.
 - Location: `e2e/{suite}/descriptive-name.go` (package matches directory name)
 - Test name format: `[Suite: component][category] Description` (e.g., `[Suite: cluster][baseline] Cluster Resource Type Lifecycle`). Known categories: `baseline`, `update`, `delete`, `concurrent`, `negative`, `perf`.
 - Test suites auto-register via blank import in `e2e/e2e.go`
@@ -156,8 +156,8 @@ When `expectedIdentity` is empty, audit assertions are skipped.
 
 ### DON'T
 
-- Use `_test.go` suffix for E2E test files
-- Hardcode timeout durations — use `h.Cfg.Timeouts.*`
+- Use `_test.go` suffix for E2E test files (sole exception: `e2e/e2e_suite_test.go`, the ginkgo CLI entry point)
+- Hardcode timeout durations - use `h.Cfg.Timeouts.*`
 - Skip cleanup (`DeferCleanup`)
 - Use `ginkgo.By()` inside `Eventually` closures
 - Import `e2e/*` packages from `pkg/` code

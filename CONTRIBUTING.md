@@ -96,18 +96,17 @@ open coverage.html
 
 ### E2E Tests
 
-Run all E2E tests (requires HyperFleet API):
+Run E2E tests (requires HyperFleet API, runs in parallel with 4 processes by default):
 
 ```bash
 export HYPERFLEET_API_URL=https://api.hyperfleet.example.com
-make e2e
-```
+make e2e GINKGO_LABEL_FILTER=tier0
 
-Run specific test suites:
+# Run specific suite
+make e2e GINKGO_FOCUS="\[Suite: cluster\]"
 
-```bash
-./bin/hyperfleet-e2e test --label-filter=tier0
-./bin/hyperfleet-e2e test --focus "\[Suite: cluster\]"
+# Single-process for debugging
+make e2e PROCS=1 GINKGO_LABEL_FILTER=tier0
 ```
 
 ### Writing Tests

@@ -21,7 +21,14 @@ COPY . .
 ARG GIT_COMMIT=unknown
 RUN make build GIT_COMMIT=${GIT_COMMIT}
 
-RUN chmod +x /build/bin/hyperfleet-e2e
+# Build ginkgo CLI (version-locked via .bingo/ginkgo.mod)
+RUN cd .bingo && GOWORK=off go build -mod=mod -modfile=ginkgo.mod \
+    -o /build/bin/ginkgo "github.com/onsi/ginkgo/v2/ginkgo"
+
+# Compile the E2E test binary for ginkgo CLI parallel execution
+RUN CGO_ENABLED=0 go test -c -o /build/bin/e2e.test ./e2e
+
+RUN chmod +x /build/bin/hyperfleet-e2e /build/bin/ginkgo /build/bin/e2e.test
 
 FROM registry.ci.openshift.org/ci/hyperfleet-credential-provider:latest AS hyperfleet-credential-provider
 
@@ -68,8 +75,10 @@ WORKDIR /e2e
 # Copy the hyperfleet-credential-provider binary
 COPY --from=hyperfleet-credential-provider /app/hyperfleet-credential-provider /usr/local/bin/
 
-# Copy binary from builder (make build outputs to bin/)
+# Copy binaries from builder (main binary + ginkgo CLI + test binary)
 COPY --from=builder /build/bin/hyperfleet-e2e /usr/local/bin/
+COPY --from=builder /build/bin/ginkgo /usr/local/bin/
+COPY --from=builder /build/bin/e2e.test /usr/local/bin/
 
 # Copy test payloads and fixtures
 COPY --from=builder /build/testdata /e2e/testdata
