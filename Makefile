@@ -3,7 +3,7 @@
 GO ?= go
 GOFMT ?= gofmt
 TOOL_MOD := tools/go.mod
-gotool = $(GO) tool -modfile=$(TOOL_MOD) $(1)
+gotool = GOWORK=off "$(GO)" tool -modfile="$(TOOL_MOD)" $(1)
 
 # Binary output directory and name
 BIN_DIR := bin
@@ -134,11 +134,11 @@ lint: ## Run golangci-lint
 
 .PHONY: tools
 tools: ## Ensure tool dependencies are up to date
-	cd tools && GOWORK=off $(GO) mod tidy
+	cd tools && GOWORK=off "$(GO)" mod tidy
 
 .PHONY: verify-tools
 verify-tools: tools ## Fail in CI if tool module drifted
-	@git diff --exit-code tools/go.mod tools/go.sum || (echo "tool modules out of date; run 'make tools'" && exit 1)
+	@git diff --exit-code HEAD -- tools/go.mod tools/go.sum || (echo "tool modules out of date; run 'make tools'" && exit 1)
 
 .PHONY: verify
 verify: generate fmt-check vet ## Run all verification checks
