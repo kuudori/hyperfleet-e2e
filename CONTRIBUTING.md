@@ -6,7 +6,7 @@ Thank you for contributing to HyperFleet E2E! This document provides guidelines 
 
 ### Prerequisites
 
-- **Go 1.25+** - [Install Go](https://go.dev/doc/install)
+- **Go 1.26+** - [Install Go](https://go.dev/doc/install)
 - **Make** - Build automation tool
 - **Container tool** - Docker or Podman for building images
 - **Git** - Version control
