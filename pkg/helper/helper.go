@@ -172,8 +172,8 @@ func (h *Helper) CleanupTestWifConfig(ctx context.Context, wifConfigID string) e
 
 	if _, err := h.Client.DeleteWifConfig(ctx, wifConfigID); err != nil {
 		var httpErr *client.HTTPError
-		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound {
-			logger.Info("wifconfig already deleted", "wifconfig_id", wifConfigID)
+		if errors.As(err, &httpErr) && (httpErr.StatusCode == http.StatusNotFound || httpErr.StatusCode == http.StatusConflict) {
+			logger.Info("wifconfig cleanup skipped", "wifconfig_id", wifConfigID, "status", httpErr.StatusCode)
 			return nil
 		}
 		return fmt.Errorf("delete wifconfig %s: %w", wifConfigID, err)

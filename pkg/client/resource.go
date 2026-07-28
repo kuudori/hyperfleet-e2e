@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"time"
@@ -203,6 +204,18 @@ func (c *HyperFleetClient) CreateResourceFromPayload(ctx context.Context, path s
 	if err != nil {
 		return nil, fmt.Errorf("load resource payload %s: %w", payloadPath, err)
 	}
+
+	return c.CreateResource(ctx, path, payload)
+}
+
+func (c *HyperFleetClient) CreateResourceFromPayloadWith(ctx context.Context, path string, payloadPath string, overrides map[string]any) (*Resource, error) {
+	logger.Debug("loading resource payload", "path", path, "payload_path", payloadPath)
+
+	payload, err := loadPayloadFromFile[map[string]any](payloadPath)
+	if err != nil {
+		return nil, fmt.Errorf("load resource payload %s: %w", payloadPath, err)
+	}
+	maps.Copy((*payload), overrides)
 
 	return c.CreateResource(ctx, path, payload)
 }
