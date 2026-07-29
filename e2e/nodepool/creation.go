@@ -13,14 +13,14 @@ import (
 )
 
 var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Lifecycle",
-	ginkgo.Label(labels.Tier0),
+	ginkgo.Ordered, ginkgo.Label(labels.Tier0),
 	func() {
 		var h *helper.Helper
 		var clusterID string
 		var nodepoolID string
 		var nodepoolName string
 
-		ginkgo.BeforeEach(func(ctx context.Context) {
+		ginkgo.BeforeAll(func(ctx context.Context) {
 			h = helper.New()
 
 			// Get or create cluster for nodepool tests
@@ -208,7 +208,7 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 				})
 		})
 
-		ginkgo.AfterEach(func(ctx context.Context) {
+		ginkgo.AfterAll(func(ctx context.Context) {
 			if h == nil || clusterID == "" {
 				return
 			}

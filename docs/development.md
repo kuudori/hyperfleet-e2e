@@ -300,6 +300,39 @@ Available pollers: see `pkg/helper/pollers.go`. Available matchers: see `pkg/hel
 - Don't skip cleanup
 - Don't create `WaitFor*` wrapper functions that hide `Eventually` — use pollers + matchers instead
 
+## Parallel Safety
+
+The suite is designed to support Ginkgo multi-process parallelism (`--procs=N`). All new tests MUST be parallel-safe unless explicitly marked `ginkgo.Serial`.
+
+### Rules for parallel-safe tests
+
+- **Unique resource names.** Use payload templates (`.Random`, `.UUID`) for all API resources. Never use fixed names.
+- **Per-spec cleanup.** Register `ginkgo.DeferCleanup` right after resource creation. Never rely on `AfterSuite` as the primary cleanup path.
+- **No shared mutable state.** Each spec gets its own `helper.New()` instance. Never store state in package-level variables that other specs read.
+- **Temp adapter names must be unique per spec.** Two specs deploying the same adapter name would race on one Helm release.
+- **Never use `os.Setenv` for values that vary per spec.** Pass values via Helm `--set` or struct fields instead.
+
+### When to use `ginkgo.Serial`
+
+Add `ginkgo.Serial` to the `Describe` decorator (not inside an `It`) and include a comment explaining why:
+
+```go
+var _ = ginkgo.Describe("...",
+    ginkgo.Serial, // Serial: scales down sentinel replicas, blocking all concurrent specs
+    ginkgo.Label(labels.Tier1, labels.Disruptive),
+    func() { ... },
+)
+```
+
+Valid reasons to mark a spec `Serial`:
+
+- **Mutates shared infrastructure** (e.g., scales deployments, deletes shared resources)
+- **Deploys temporary adapters** that subscribe to all events, causing cross-talk with concurrent specs
+
+Specs already marked `Serial`: sentinel scale-down, force-delete, stuck-deletion, crash-recovery, maestro-unavailability, adapter-failover, adapter-failure, maestro negative scenarios.
+
+Performance specs (`labels.Performance`) are a separate category - they carry no tier label and run in their own dedicated CI job (`--label-filter="perf"`) on a quiet system. They are not marked `Serial` because they never run alongside functional tests.
+
 ## Adding New Tests
 
 ### 1. Create Test File

@@ -14,7 +14,7 @@ import (
 )
 
 var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Unable to Finalize Prevents Hard-Delete",
-	ginkgo.Serial,
+	ginkgo.Serial, // Serial: deploys stuck adapter that blocks deletion of all clusters
 	ginkgo.Label(labels.Tier2, labels.Negative),
 	func() {
 		var (

@@ -84,11 +84,20 @@ test-coverage: test ## Run tests and generate HTML coverage report
 e2e: build ## Run all E2E tests
 	TESTDATA_DIR=$(PWD)/testdata ./$(BINARY_NAME) test
 
-.PHONY: e2e-ci
-e2e-ci: build ## Run E2E tests with CI configuration
-	mkdir -p $(OUTPUT_DIR)
-	TESTDATA_DIR=$(PWD)/testdata ./$(BINARY_NAME) test --flake-attempts=$(FLAKE_ATTEMPTS) --junit-report $(OUTPUT_DIR)/junit.xml
+PROCS ?= 4
 
+.PHONY: e2e-ci
+e2e-ci: $(GINKGO) ## Run E2E tests with CI configuration (parallel via ginkgo CLI)
+	mkdir -p $(OUTPUT_DIR)
+	TESTDATA_DIR=$(PWD)/testdata $(GINKGO) \
+		--procs=$(PROCS) \
+		--flake-attempts=$(FLAKE_ATTEMPTS) \
+		--junit-report=junit.xml \
+		--output-dir=$(OUTPUT_DIR) \
+		$(if $(GINKGO_LABEL_FILTER),--label-filter="$(GINKGO_LABEL_FILTER)") \
+		$(if $(GINKGO_FOCUS),--focus="$(GINKGO_FOCUS)") \
+		$(if $(GINKGO_SKIP),--skip="$(GINKGO_SKIP)") \
+		./e2e
 .PHONY: list-tests
 list-tests: build ## List E2E tests by tier without executing (dry-run)
 	@echo "=== tier0 ==="
