@@ -254,13 +254,30 @@ fi
 
 if [[ "$ACTION" == "reset" ]]; then
   if [[ "$KIND" == "channels" ]]; then
-    parent_check=$(curl -G -s $CURL_OPTS "$API_BASE/channels" \
+    parent_lookup=$(curl -G -s -w '\n%{http_code}' $CURL_OPTS "$API_BASE/channels" \
       --data-urlencode "search=name='$PARENT_CHANNEL_NAME'" \
       --data-urlencode "size=1" \
-      --http1.1 -H "Accept: application/json" | jq -r '.items[0].id // empty')
+      --http1.1 -H "Accept: application/json")
+    parent_lookup_code=$(echo "$parent_lookup" | tail -1)
+    if [[ ! "$parent_lookup_code" =~ ^2 ]]; then
+      echo "ERROR: failed to check for parent channel '$PARENT_CHANNEL_NAME' (HTTP $parent_lookup_code); aborting reset" >&2
+      exit 1
+    fi
+    parent_check=$(echo "$parent_lookup" | sed '$d' | jq -r '.items[0].id // empty')
+
     if [[ -n "$parent_check" ]]; then
-      version_count=$(curl -s $CURL_OPTS "$API_BASE/channels/$parent_check/versions?size=1" \
-        --http1.1 -H "Accept: application/json" | jq '.total // 0')
+      version_lookup=$(curl -s -w '\n%{http_code}' $CURL_OPTS "$API_BASE/channels/$parent_check/versions?size=1" \
+        --http1.1 -H "Accept: application/json")
+      version_lookup_code=$(echo "$version_lookup" | tail -1)
+      if [[ ! "$version_lookup_code" =~ ^2 ]]; then
+        echo "ERROR: failed to check version count under '$PARENT_CHANNEL_NAME' (HTTP $version_lookup_code); aborting reset" >&2
+        exit 1
+      fi
+      version_count=$(echo "$version_lookup" | sed '$d' | jq -r '.total // empty')
+      if [[ ! "$version_count" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: could not parse version count from API response; aborting reset" >&2
+        exit 1
+      fi
       if [[ "$version_count" -gt 0 ]]; then
         echo "ERROR: $version_count versions still exist under parent channel '$PARENT_CHANNEL_NAME'."
         echo "Channel deletion is blocked while versions exist (on_parent_delete: restrict)."
