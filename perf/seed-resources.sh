@@ -253,6 +253,23 @@ if [[ "$ACTION" == "cleanup" ]]; then
 fi
 
 if [[ "$ACTION" == "reset" ]]; then
+  if [[ "$KIND" == "channels" ]]; then
+    parent_check=$(curl -G -s $CURL_OPTS "$API_BASE/channels" \
+      --data-urlencode "search=name='$PARENT_CHANNEL_NAME'" \
+      --data-urlencode "size=1" \
+      --http1.1 -H "Accept: application/json" | jq -r '.items[0].id // empty')
+    if [[ -n "$parent_check" ]]; then
+      version_count=$(curl -s $CURL_OPTS "$API_BASE/channels/$parent_check/versions?size=1" \
+        --http1.1 -H "Accept: application/json" | jq '.total // 0')
+      if [[ "$version_count" -gt 0 ]]; then
+        echo "ERROR: $version_count versions still exist under parent channel '$PARENT_CHANNEL_NAME'."
+        echo "Channel deletion is blocked while versions exist (on_parent_delete: restrict)."
+        echo "Run './perf/seed-resources.sh versions reset' first, then retry."
+        exit 1
+      fi
+    fi
+  fi
+
   total=$(curl -s $CURL_OPTS "$API_BASE/$ENDPOINT?size=1" --http1.1 -H "Accept: application/json" | jq '.total // 0')
   echo "WARNING: This will delete ALL $total $KIND at $API_URL"
   echo "kubectl context: $(kubectl config current-context 2>/dev/null || echo 'unknown')"
