@@ -22,7 +22,11 @@ source env/env.local
 
 ## Seeding data
 
-For realistic baselines, seed the database with clusters before running tests. The seeded clusters add realistic table size so query planner behavior and index performance reflect production conditions.
+For realistic baselines, seed the database before running tests. Seeded rows add
+realistic table size so query planner behavior and index performance reflect
+production conditions. Clusters and NodePools share the `resources` table with
+Channel, Version, and WifConfig (see [HYPERFLEET-1159](https://issues.redhat.com/browse/HYPERFLEET-1159)),
+so seeding any of these kinds grows the same underlying table.
 
 ### Check api settings
 ```bash
@@ -42,6 +46,27 @@ curl -f -X GET ${HYPERFLEET_API_URL}/api/hyperfleet/v1/clusters/
 
 # Or delete ALL clusters (clean slate)
 ./perf/seed-clusters.sh reset
+```
+
+For the generic (non-reconciling) resource kinds — Channel, WifConfig, Version —
+use `seed-resources.sh`, which takes the kind as its first argument. Versions are
+nested under channels, so seeding versions creates (or reuses) a single dedicated
+parent channel and seeds all versions under it:
+
+```bash
+# Seed 1000 channels / wifconfigs / versions
+./perf/seed-resources.sh channels 1000
+./perf/seed-resources.sh wifconfigs 1000
+./perf/seed-resources.sh versions 1000
+
+# Check what's in the database
+./perf/seed-resources.sh channels status
+
+# Clean up seeded resources only
+./perf/seed-resources.sh channels cleanup
+
+# Or delete ALL resources of that kind (clean slate)
+./perf/seed-resources.sh channels reset
 ```
 
 ## Running tests

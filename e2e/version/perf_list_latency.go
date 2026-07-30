@@ -1,0 +1,53 @@
+package version
+
+import (
+	"context"
+	"time"
+
+	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
+
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
+)
+
+var _ = ginkgo.Describe("[Suite: version][perf] API list latency",
+	ginkgo.Label(labels.Tier1, labels.Performance),
+	func() {
+		var h *helper.Helper
+		var channelID string
+
+		ginkgo.BeforeEach(func(ctx context.Context) {
+			h = helper.New()
+
+			ginkgo.By("creating parent channel")
+			ch, err := h.Client.CreateChannelFromPayload(ctx, h.TestDataPath("payloads/channels/channel-request.json"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ch.Id).NotTo(BeNil(), "channel ID should be set")
+			channelID = *ch.Id
+
+			ginkgo.DeferCleanup(func(ctx context.Context) {
+				if err := h.CleanupTestChannel(ctx, channelID); err != nil {
+					ginkgo.GinkgoWriter.Printf("Warning: failed to cleanup channel %s: %v\n", channelID, err)
+				}
+			})
+
+			ginkgo.By("creating version under channel")
+			version, err := h.Client.CreateVersionFromPayload(ctx, channelID, h.TestDataPath("payloads/versions/version-request.json"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(version.Id).NotTo(BeNil(), "version ID should be set")
+		})
+
+		ginkgo.It("should list versions within acceptable latency", func(ctx context.Context) {
+			ginkgo.By("measuring GET /channels/{parent_id}/versions response time")
+			start := time.Now()
+			_, err := h.Client.ListVersions(ctx, channelID, "")
+			Expect(err).NotTo(HaveOccurred())
+			elapsed := time.Since(start)
+			ginkgo.GinkgoWriter.Printf("[PERF] GET /channels/%s/versions latency: %v\n", channelID, elapsed)
+			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIList),
+				"GET /channels/{parent_id}/versions exceeded threshold")
+		})
+	},
+)
