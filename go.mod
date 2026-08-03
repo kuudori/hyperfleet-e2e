@@ -1,6 +1,6 @@
 module github.com/openshift-hyperfleet/hyperfleet-e2e
 
-go 1.25.0
+go 1.26.0
 
 require (
 	cloud.google.com/go/pubsub/v2 v2.6.0

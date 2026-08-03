@@ -4,7 +4,7 @@ New to HyperFleet E2E? This guide will help you run your first test in 10 minute
 
 ## Prerequisites
 
-- **Go 1.25+** - Required for building the framework
+- **Go 1.26+** - Required for building the framework
 - **HyperFleet deployment** - Running HyperFleet API and Maestro instance
 - **10 minutes** - Time to complete this guide
 

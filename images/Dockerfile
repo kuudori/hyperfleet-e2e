@@ -7,7 +7,7 @@
 ARG BASE_IMAGE=registry.access.redhat.com/ubi9/go-toolset
 
 # Build stage
-FROM golang:1.25 AS builder
+FROM golang:1.26.0 AS builder
 
 WORKDIR /build
 

@@ -7,7 +7,7 @@
 ARG BASE_IMAGE=registry.access.redhat.com/ubi9/go-toolset
 
 # Build stage
-FROM golang:1.25 AS builder
+FROM golang:1.26.0 AS builder
 
 WORKDIR /build
 
@@ -21,9 +21,8 @@ COPY . .
 ARG GIT_COMMIT=unknown
 RUN make build GIT_COMMIT=${GIT_COMMIT}
 
-# Build ginkgo CLI (version-locked via .bingo/ginkgo.mod)
-RUN cd .bingo && GOWORK=off go build -mod=mod -modfile=ginkgo.mod \
-    -o /build/bin/ginkgo "github.com/onsi/ginkgo/v2/ginkgo"
+# Build ginkgo CLI (version-locked via tools/go.mod)
+RUN cd tools && go build -o /build/bin/ginkgo "github.com/onsi/ginkgo/v2/ginkgo"
 
 # Compile the E2E test binary for ginkgo CLI parallel execution
 RUN CGO_ENABLED=0 go test -c -o /build/bin/e2e.test ./e2e
