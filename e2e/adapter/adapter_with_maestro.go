@@ -65,16 +65,17 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 					ginkgo.By("Step 2: Verify ManifestWork (resource bundle) was created on Maestro")
 					// Query Maestro API via HTTP client
 					Eventually(func(g Gomega) {
-						rb, err := h.GetMaestroClient().FindResourceBundleByClusterID(ctx, clusterID)
-						g.Expect(err).NotTo(HaveOccurred(), "failed to find resource bundle for cluster")
-						resourceBundle = rb
+						resourceBundles, err := h.GetMaestroClient().FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName)
+						g.Expect(err).NotTo(HaveOccurred(), "should be able to query Maestro for resource bundles")
+						g.Expect(resourceBundles).NotTo(BeEmpty(), "should be able to find resource bundle for cluster")
+						resourceBundle = &resourceBundles[0]
 
 						// Verify consumer name
-						g.Expect(rb.ConsumerName).To(Equal(maestroConsumerName),
+						g.Expect(resourceBundle.ConsumerName).To(Equal(maestroConsumerName),
 							"resource bundle should target correct consumer")
 
 						// Verify version
-						g.Expect(rb.Version).To(Equal(1),
+						g.Expect(resourceBundle.Version).To(Equal(1),
 							"resource bundle should have version=1")
 
 						// Verify manifest names
@@ -82,17 +83,17 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 							fmt.Sprintf("%s-%s-namespace", clusterID, adapterName),
 							fmt.Sprintf("%s-%s-configmap", clusterID, adapterName),
 						}
-						g.Expect(rb.Manifests).To(HaveLen(2),
+						g.Expect(resourceBundle.Manifests).To(HaveLen(2),
 							"resource bundle should contain 2 manifests")
 
-						manifestNames := make([]string, len(rb.Manifests))
-						for i, m := range rb.Manifests {
+						manifestNames := make([]string, len(resourceBundle.Manifests))
+						for i, m := range resourceBundle.Manifests {
 							manifestNames[i] = m.Metadata.Name
 						}
 						g.Expect(manifestNames).To(ConsistOf(expectedManifests),
 							"manifest names should match expected pattern")
 
-						ginkgo.GinkgoWriter.Printf("Found resource bundle ID: %s\n", rb.ID)
+						ginkgo.GinkgoWriter.Printf("Found resource bundle ID: %s\n", resourceBundle.ID)
 					}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 
 					ginkgo.By("Step 3: Verify ManifestWork metadata (labels and annotations)")
@@ -343,15 +344,16 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 					ginkgo.By("Step 2: Wait for initial ManifestWork creation and capture resource bundle ID")
 					// Query Maestro API to find the resource bundle
 					Eventually(func(g Gomega) {
-						rb, err := h.GetMaestroClient().FindResourceBundleByClusterID(ctx, clusterID)
+						rbs, err := h.GetMaestroClient().FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName)
 						g.Expect(err).NotTo(HaveOccurred(), "failed to find resource bundle for cluster")
-						resourceBundle = rb
+						g.Expect(rbs).NotTo(BeEmpty(), "should find resource bundle for adapter")
+						resourceBundle = &rbs[0]
 
 						// Verify version is 1 (initial creation)
-						g.Expect(rb.Version).To(Equal(1),
+						g.Expect(resourceBundle.Version).To(Equal(1),
 							"resource bundle should have version=1 after initial creation")
 
-						ginkgo.GinkgoWriter.Printf("Found resource bundle ID: %s with version: %d\n", rb.ID, rb.Version)
+						ginkgo.GinkgoWriter.Printf("Found resource bundle ID: %s with version: %d\n", resourceBundle.ID, resourceBundle.Version)
 					}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 
 					Expect(resourceBundle).NotTo(BeNil(), "resource bundle should be found")
@@ -408,14 +410,15 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 					ginkgo.By("Step 5: Verify Maestro resource version does not change on Skip")
 					// Query the resource bundle again to verify version remains unchanged
 					Eventually(func(g Gomega) {
-						rb, err := h.GetMaestroClient().FindResourceBundleByClusterID(ctx, clusterID)
+						rbs, err := h.GetMaestroClient().FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName)
 						g.Expect(err).NotTo(HaveOccurred(), "failed to find resource bundle")
+						g.Expect(rbs).NotTo(BeEmpty(), "should find resource bundle for adapter")
 
 						// Version should remain at initial version (1)
-						g.Expect(rb.Version).To(Equal(initialVersion),
+						g.Expect(rbs[0].Version).To(Equal(initialVersion),
 							"resource bundle version should remain unchanged across Skip operations")
 
-						ginkgo.GinkgoWriter.Printf("Verified resource bundle version remains at: %d\n", rb.Version)
+						ginkgo.GinkgoWriter.Printf("Verified resource bundle version remains at: %d\n", rbs[0].Version)
 					}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 				})
 		})
@@ -424,7 +427,7 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport] Adapter Framework -
 )
 
 var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter Framework - Maestro Transport Negative Scenarios",
-	ginkgo.Label(labels.Tier1),
+	ginkgo.Label(labels.Tier1, labels.Adapter, labels.Negative),
 	func() {
 		var (
 			h              *helper.Helper
@@ -483,12 +486,28 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 						ginkgo.GinkgoWriter.Printf("Warning: failed to cleanup cluster %s: %v\n", clusterID, err)
 					}
 				}
+
 				if adapterName != "" {
 					if h.Cfg.BrokerType == "googlepubsub" {
-						ginkgo.By("Clean up Pub/Sub subscription and dlq topic for adapter")
+						ginkgo.By("Cleanup Pub/Sub subscription and dlq topic for adapter")
 						if err := h.DeletePubSubResourcesForAdapter(ctx, adapterName, baseDeployOpts.ResourceType); err != nil {
 							ginkgo.GinkgoWriter.Printf("Warning: failed to delete Pub/Sub subscription and dlq topic for adapter %s: %v\n", adapterName, err)
 						}
+					}
+				}
+
+				if clusterID != "" && adapterName != "" {
+					ginkgo.By("Cleanup Resource Bundles by clusterID " + clusterID + " and adapterName " + adapterName)
+					// Best effort delete outstanding resource bundles created on cluster creation
+					if rbs, err := h.MaestroClient.FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName); err == nil {
+						for _, rb := range rbs {
+							err := h.MaestroClient.DeleteResourceBundle(ctx, rb.ID)
+							if err != nil {
+								ginkgo.GinkgoWriter.Printf("Warning: failed to delete resource bundle %s: %v\n", rb.ID, err)
+							}
+						}
+					} else {
+						ginkgo.GinkgoWriter.Printf("Warning: error finding resource bundles for cluster %s and adapter %s: %v\n", clusterID, adapterName, err)
 					}
 				}
 			})
@@ -603,19 +622,10 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 
 				ginkgo.By("Verify no ManifestWork was created by the test adapter on Maestro")
 				Eventually(func(g Gomega) {
-					// Query by cluster ID first to scope to current cluster
-					rbs, err := h.GetMaestroClient().FindAllResourceBundlesByClusterID(ctx, clusterID)
+					resourceBundles, err := h.GetMaestroClient().FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName)
 					g.Expect(err).NotTo(HaveOccurred(), "should be able to query Maestro for resource bundles")
 
-					// Filter by adapter name using source-id label
-					var adapterBundles []maestro.ResourceBundle
-					for _, rb := range rbs {
-						if rb.Metadata.Labels != nil && rb.Metadata.Labels["maestro.io/source-id"] == adapterName {
-							adapterBundles = append(adapterBundles, rb)
-						}
-					}
-
-					g.Expect(adapterBundles).To(BeEmpty(),
+					g.Expect(resourceBundles).To(BeEmpty(),
 						"no ManifestWork should be created by adapter %s for cluster %s with unregistered consumer", adapterName, clusterID)
 					ginkgo.GinkgoWriter.Printf("Verified no ManifestWork exists from adapter %s for cluster %s\n",
 						adapterName, clusterID)
@@ -624,8 +634,8 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 				ginkgo.By("Verify no K8s resources were created by the test adapter")
 				Eventually(func(g Gomega) {
 					// Check specifically for namespace that would have been created by THIS adapter
-					// Expected namespace name pattern: ${clusterID}-${adapterName}-namespace
-					expectedNamespace := fmt.Sprintf("%s-%s-namespace", clusterID, adapterName)
+					// Expected namespace name pattern: ${adapterName}-${clusterID}
+					expectedNamespace := fmt.Sprintf("%s-%s-namespace", adapterName, clusterID)
 					_, err := h.GetNamespace(ctx, expectedNamespace)
 
 					// We expect the namespace to NOT exist (should get error)
@@ -683,26 +693,17 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 				// Verify ManifestWork was created by the test adapter despite wrong discovery config
 				ginkgo.By("Verify ManifestWork was created by the test adapter on Maestro")
 				Eventually(func(g Gomega) {
-					// Query by cluster ID first to scope to current cluster
-					rbs, err := h.GetMaestroClient().FindAllResourceBundlesByClusterID(ctx, clusterID)
+					resourceBundles, err := h.GetMaestroClient().FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName)
 					g.Expect(err).NotTo(HaveOccurred(), "should be able to query Maestro for resource bundles")
 
-					// Filter by adapter name using source-id label
-					var adapterBundles []maestro.ResourceBundle
-					for _, rb := range rbs {
-						if rb.Metadata.Labels != nil && rb.Metadata.Labels["maestro.io/source-id"] == adapterName {
-							adapterBundles = append(adapterBundles, rb)
-						}
-					}
-
-					g.Expect(adapterBundles).NotTo(BeEmpty(), "ManifestWork should be created by adapter %s for cluster %s despite wrong discovery", adapterName, clusterID)
-					ginkgo.GinkgoWriter.Printf("Found resource bundle created by adapter %s for cluster %s: ID=%s\n", adapterName, clusterID, adapterBundles[0].ID)
+					g.Expect(resourceBundles).NotTo(BeEmpty(), "ManifestWork should be created by adapter %s for cluster %s despite wrong discovery", adapterName, clusterID)
+					ginkgo.GinkgoWriter.Printf("Found resource bundle created by adapter %s for cluster %s: ID=%s\n", adapterName, clusterID, resourceBundles[0].ID)
 				}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 
 				// Verify K8s resources were created by Maestro agent
 				ginkgo.By("Verify K8s resources were created by Maestro agent")
-				namespaceName := fmt.Sprintf("%s-%s-namespace", clusterID, adapterName)
-				configmapName := fmt.Sprintf("%s-%s-configmap", clusterID, adapterName)
+				namespaceName := fmt.Sprintf("%s-%s-namespace", adapterName, clusterID)
+				configmapName := fmt.Sprintf("%s-%s-configmap", adapterName, clusterID)
 
 				Eventually(func(g Gomega) {
 					// Verify namespace exists
@@ -871,25 +872,16 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 				ginkgo.GinkgoWriter.Printf("Created cluster ID: %s, Name: %s\n", clusterID, cluster.Name)
 
 				// Construct namespace name AFTER cluster is created
-				namespaceName := fmt.Sprintf("%s-%s-namespace", clusterID, adapterName)
+				namespaceName := fmt.Sprintf("%s-%s-namespace", adapterName, clusterID)
 
 				// Verify ManifestWork was created by the test adapter
 				ginkgo.By("Verify ManifestWork was created by the test adapter on Maestro")
 				Eventually(func(g Gomega) {
-					// Query by cluster ID first to scope to current cluster
-					rbs, err := h.GetMaestroClient().FindAllResourceBundlesByClusterID(ctx, clusterID)
+					resourceBundles, err := h.GetMaestroClient().FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName)
 					g.Expect(err).NotTo(HaveOccurred(), "should be able to query Maestro for resource bundles")
 
-					// Filter by adapter name using source-id label
-					var adapterBundles []maestro.ResourceBundle
-					for _, rb := range rbs {
-						if rb.Metadata.Labels != nil && rb.Metadata.Labels["maestro.io/source-id"] == adapterName {
-							adapterBundles = append(adapterBundles, rb)
-						}
-					}
-
-					g.Expect(adapterBundles).NotTo(BeEmpty(), "ManifestWork should be created by adapter %s for cluster %s", adapterName, clusterID)
-					ginkgo.GinkgoWriter.Printf("Found resource bundle created by adapter %s for cluster %s: ID=%s\n", adapterName, clusterID, adapterBundles[0].ID)
+					g.Expect(resourceBundles).NotTo(BeEmpty(), "ManifestWork should be created by adapter %s for cluster %s", adapterName, clusterID)
+					ginkgo.GinkgoWriter.Printf("Found resource bundle created by adapter %s for cluster %s: ID=%s\n", adapterName, clusterID, resourceBundles[0].ID)
 				}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 
 				// Verify K8s resources were created
@@ -1039,28 +1031,19 @@ var _ = ginkgo.Describe("[Suite: adapter][maestro-transport][negative] Adapter F
 				ginkgo.GinkgoWriter.Printf("Created cluster ID: %s, Name: %s\n", clusterID, cluster.Name)
 
 				// Construct namespace name AFTER cluster is created
-				namespaceName := fmt.Sprintf("%s-%s-namespace", clusterID, adapterName)
+				namespaceName := fmt.Sprintf("%s-%s-namespace", adapterName, clusterID)
 
 				ginkgo.By("Verify ManifestWork was applied successfully by the test adapter in Maestro")
 				// Even though post-action failed, the ManifestWork should exist in Maestro
 				Eventually(func(g Gomega) {
-					// Query by cluster ID first to scope to current cluster
-					rbs, err := h.GetMaestroClient().FindAllResourceBundlesByClusterID(ctx, clusterID)
+					resourceBundles, err := h.GetMaestroClient().FindResourceBundlesByClusterAndAdapter(ctx, clusterID, adapterName)
 					g.Expect(err).NotTo(HaveOccurred(), "should be able to query Maestro for resource bundles")
 
-					// Filter by adapter name using source-id label
-					var adapterBundles []maestro.ResourceBundle
-					for _, rb := range rbs {
-						if rb.Metadata.Labels != nil && rb.Metadata.Labels["maestro.io/source-id"] == adapterName {
-							adapterBundles = append(adapterBundles, rb)
-						}
-					}
-
-					g.Expect(adapterBundles).NotTo(BeEmpty(), "ManifestWork should exist in Maestro created by adapter %s for cluster %s", adapterName, clusterID)
-					g.Expect(adapterBundles[0].ID).NotTo(BeEmpty(), "ManifestWork should have an ID")
-					g.Expect(adapterBundles[0].ConsumerName).NotTo(BeEmpty(), "ManifestWork should have a consumer")
+					g.Expect(resourceBundles).NotTo(BeEmpty(), "ManifestWork should exist in Maestro created by adapter %s for cluster %s", adapterName, clusterID)
+					g.Expect(resourceBundles[0].ID).NotTo(BeEmpty(), "ManifestWork should have an ID")
+					g.Expect(resourceBundles[0].ConsumerName).NotTo(BeEmpty(), "ManifestWork should have a consumer")
 					ginkgo.GinkgoWriter.Printf("ManifestWork verified in Maestro for adapter %s and cluster %s: ID=%s, Consumer=%s\n",
-						adapterName, clusterID, adapterBundles[0].ID, adapterBundles[0].ConsumerName)
+						adapterName, clusterID, resourceBundles[0].ID, resourceBundles[0].ConsumerName)
 				}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
 
 				// Verify K8s resources were created

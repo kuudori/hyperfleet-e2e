@@ -42,7 +42,7 @@ resources:
       kind: ManifestWork
       metadata:
         # ManifestWork name - must be unique within consumer namespace
-        name: "{{ .clusterId }}-{{ .adapter.name }}"
+        name: "{{ .adapter.name }}-{{ .clusterId }}"
 
         # Labels for identification, filtering, and management
         labels:
@@ -94,7 +94,7 @@ resources:
           - apiVersion: v1
             kind: Namespace
             metadata:
-              name: "{{ .clusterId | lower }}-{{ .adapter.name }}-namespace"
+              name: "{{ .adapter.name }}-{{ .clusterId }}-namespace"
               labels:
                 app.kubernetes.io/component: adapter-task-config
                 app.kubernetes.io/instance: "{{ .adapter.name }}"
@@ -109,8 +109,8 @@ resources:
               cluster_id: "{{ .clusterId }}"
               cluster_name: "{{ .clusterId }}"
             metadata:
-              name: "{{ .clusterId | lower }}-{{ .adapter.name }}-configmap"
-              namespace: "{{ .clusterId | lower }}-{{ .adapter.name }}-namespace"
+              name: "{{ .adapter.name }}-{{ .clusterId }}-configmap"
+              namespace: "{{ .adapter.name }}-{{ .clusterId }}-namespace"
               labels:
                 app.kubernetes.io/component: adapter-task-config
                 app.kubernetes.io/instance: "{{ .adapter.name }}"
@@ -141,7 +141,7 @@ resources:
           - resourceIdentifier:
               group: ""                           # Core API group (empty for v1 resources)
               resource: "namespaces"              # Resource type
-              name: "{{ .clusterId | lower }}-{{ .adapter.name }}-namespace"    # Specific resource name
+              name: "{{ .adapter.name }}-{{ .clusterId }}-namespace"
             updateStrategy:
               type: "ServerSideApply"             # Use server-side apply for namespaces
             feedbackRules:
@@ -155,8 +155,8 @@ resources:
           - resourceIdentifier:
               group: ""                           # Core API group (empty for v1 resources)
               resource: "configmaps"              # Resource type
-              name: "{{ .clusterId | lower }}-{{ .adapter.name }}-configmap"    # Specific resource name
-              namespace: "{{ .clusterId | lower }}-{{ .adapter.name }}-namespace"
+              name: "{{ .adapter.name }}-{{ .clusterId }}-configmap"
+              namespace: "{{ .adapter.name }}-{{ .clusterId }}-namespace"
             updateStrategy:
               type: "ServerSideApply"             # Use server-side apply for namespaces
               serverSideApply:
@@ -171,16 +171,16 @@ resources:
                     path: ".metadata.resourceVersion"
     # Discover the ResourceBundle (ManifestWork) by name from Maestro
     discovery:
-      by_name: "{{ .clusterId }}-{{ .adapter.name }}"
+      by_name: "{{ .adapter.name }}-{{ .clusterId }}"
 
     # Discover nested resources deployed by the ManifestWork
     nested_discoveries:
       - name: "namespace0"
         discovery:
-          by_name: "{{ .clusterId | lower }}-{{ .adapter.name }}-namespace"
+          by_name: "{{ .adapter.name }}-{{ .clusterId }}-namespace"
       - name: "configmap0"
         discovery:
-          by_name: "{{ .clusterId | lower }}-{{ .adapter.name }}-configmap"
+          by_name: "{{ .adapter.name }}-{{ .clusterId }}-configmap"
 
 post:
   payloads:

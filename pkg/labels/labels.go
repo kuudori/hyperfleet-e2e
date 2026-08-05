@@ -25,6 +25,7 @@ const (
 // Functionality labels - Feature category dimension: describes test coverage target
 const (
 	Upgrade = "upgrade" // Version compatibility: smooth upgrades
+	Adapter = "adapter" // Adapter: specific adapter tests that install and uninstall the adapter chart
 )
 
 // Constraint labels - Execution constraint dimension: determines scheduling strategy

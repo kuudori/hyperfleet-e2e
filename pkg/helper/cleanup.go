@@ -7,28 +7,21 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/maestro"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper/helm"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/logger"
 )
 
-var AppliedManifestWorksGVR = &schema.GroupVersionResource{
-	Group:    "work.open-cluster-management.io",
-	Version:  "v1",
-	Resource: "appliedmanifestworks",
-}
-
 type CleanupHelper struct {
 	cfg                      *config.Config
 	k8sClient                *kubernetes.Client
-	dynamicClient            *kubernetes.DynamicClient
 	labelSelectorListOptions metav1.ListOptions
 	adapterDeploymentList    *AdapterDeploymentList
+	maestroClient            *maestro.Client
 }
 
 // NewCleanupHelper creates a new CleanupHelper
@@ -47,18 +40,18 @@ func NewCleanupHelper() (*CleanupHelper, error) {
 	if adapterDeploymentList == nil {
 		return nil, fmt.Errorf("adapter deployment list must be set for resource cleanup tracking")
 	}
+
 	// RUN_ID is set when tests are executed, forms the label: e2e.hyperfleet.io/run-id=<run_id>
 	// Label applied to adapters and resources created during test suite execution
 	labelSelector := fmt.Sprintf("e2e.hyperfleet.io/run-id=%s", cfg.RunID)
-	dynamicClient, err := kubernetes.NewDynamicClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
-	}
 	labelSelectorListOptions := metav1.ListOptions{
 		LabelSelector: labelSelector,
 	}
 
-	return &CleanupHelper{k8sClient: k8sClient, dynamicClient: dynamicClient, labelSelectorListOptions: labelSelectorListOptions, cfg: cfg, adapterDeploymentList: adapterDeploymentList}, nil
+	// Create Maestro Client for cleanup workflow
+	maestroClient := maestro.NewClient("")
+
+	return &CleanupHelper{k8sClient: k8sClient, labelSelectorListOptions: labelSelectorListOptions, cfg: cfg, adapterDeploymentList: adapterDeploymentList, maestroClient: maestroClient}, nil
 }
 
 // CleanupPubSubResources sweeps Pub/Sub topics and subscriptions created by adapters
@@ -153,12 +146,22 @@ func (c *CleanupHelper) SweepPubsubTestAdapterResources(ctx context.Context) err
 func (c *CleanupHelper) SweepLabeledResources(ctx context.Context) error {
 	logger.Info("Starting robust test cleanup with label selector:", "labelSelector", c.labelSelectorListOptions.LabelSelector)
 
-	// Phase 1: Remove AppliedManifestWork finalizers to break controller dependencies
-	logger.Info("Phase 1: Removing finalizers from AppliedManifestWorks")
-	c.removeAppliedManifestWorkFinalizers(ctx)
+	// Phase 1: Delete ResourceBundles Created by Run ID
+	logger.Info("Phase 1: Best effort to delete Resource Bundles created by run ID")
+	if rbs, err := c.maestroClient.FindResourceBundlesByRunID(ctx, c.cfg.RunID); err == nil {
+		for _, rb := range rbs {
+			// Best effort deletion of resource bundles
+			err := c.maestroClient.DeleteResourceBundle(ctx, rb.ID)
+			if err != nil {
+				logger.Error("failed to delete resource bundle", "error", err)
+			}
+		}
+	} else {
+		logger.Error("failed to get resource bundles by run Id", "error", err)
+	}
 
 	// Phase 2: Delete resources (Background propagation - don't wait for cascade)
-	logger.Info("Phase 2: Deleting resources")
+	logger.Info("Phase 2: Best effort to delete resources")
 	if err := c.deleteJobs(ctx); err != nil {
 		logger.Error("failed to delete jobs", "error", err)
 	}
@@ -167,9 +170,6 @@ func (c *CleanupHelper) SweepLabeledResources(ctx context.Context) error {
 	}
 	if err := c.deleteConfigMaps(ctx); err != nil {
 		logger.Error("failed to delete configmaps", "error", err)
-	}
-	if err := c.deleteAppliedManifestWorksForce(ctx); err != nil {
-		logger.Error("failed to delete applied manifest works", "error", err)
 	}
 	if err := c.deleteNamespacesForce(ctx); err != nil {
 		logger.Error("failed to delete namespaces", "error", err)
@@ -198,73 +198,11 @@ func (c *CleanupHelper) SweepLabeledResources(ctx context.Context) error {
 	return nil
 }
 
-// removeAllFinalizers strips finalizers from AppliedManifestWorks
-// These are the resources with custom finalizers that block deletion
-func (c *CleanupHelper) removeAppliedManifestWorkFinalizers(ctx context.Context) {
-	amws, err := c.dynamicClient.Resource(*AppliedManifestWorksGVR).List(ctx, c.labelSelectorListOptions)
-	if err != nil {
-		logger.Error("failed to list AppliedManifestWorks for finalizer removal", "error", err)
-		return
-	}
-	for _, amw := range amws.Items {
-		if len(amw.GetFinalizers()) > 0 {
-			name := amw.GetName()
-			logger.Info("Removing finalizers from AppliedManifestWork", "name", name, "finalizers", amw.GetFinalizers())
-
-			// Patch to remove finalizers
-			patch := []byte(`{"metadata":{"finalizers":null}}`)
-			_, err := c.dynamicClient.Resource(*AppliedManifestWorksGVR).Patch(
-				ctx,
-				name,
-				types.MergePatchType,
-				patch,
-				metav1.PatchOptions{},
-			)
-			if err != nil {
-				logger.Error("failed to remove finalizers from AppliedManifestWork", "name", name, "error", err)
-			}
-		}
-	}
-}
-
-// deleteAppliedManifestWorksForce deletes AMWs without relying on propagation
-func (c *CleanupHelper) deleteAppliedManifestWorksForce(ctx context.Context) error {
-	appliedManifestWorks, err := c.dynamicClient.Resource(*AppliedManifestWorksGVR).List(ctx, c.labelSelectorListOptions)
-	if err != nil {
-		return fmt.Errorf("failed to list AppliedManifestWorks: %w", err)
-	}
-
-	// Use Background propagation - we already removed finalizers
-	propagationPolicy := metav1.DeletePropagationBackground
-	zeroInt64 := int64(0)
-	deleteOptions := metav1.DeleteOptions{
-		PropagationPolicy:  &propagationPolicy,
-		GracePeriodSeconds: &zeroInt64,
-	}
-
-	for _, appliedManifestWork := range appliedManifestWorks.Items {
-		appliedManifestWorkName := appliedManifestWork.GetName()
-		logger.Warn("Deleting AppliedManifestWork", "name", appliedManifestWorkName)
-		if err := c.dynamicClient.Resource(*AppliedManifestWorksGVR).Delete(ctx, appliedManifestWorkName, deleteOptions); err != nil {
-			logger.Error("failed to delete AppliedManifestWork", "name", appliedManifestWorkName, "error", err)
-		}
-	}
-	return nil
-}
-
 // countRemainingResources returns the count of resources still present
 // If any error occurs, the count that was obtained is returned and an error is returned
 func (c *CleanupHelper) countRemainingResources(ctx context.Context) (int, error) {
 	count := 0
 	errorList := []string{}
-	// Count AppliedManifestWorks
-	amws, err := c.dynamicClient.Resource(*AppliedManifestWorksGVR).List(ctx, c.labelSelectorListOptions)
-	if err != nil {
-		logger.Error("failed to list AppliedManifestWorks", "error", err)
-		errorList = append(errorList, "AppliedManifestWorks")
-	} else {
-		count += len(amws.Items)
-	}
 
 	// Count Namespaces
 	namespaces, err := c.k8sClient.CoreV1().Namespaces().List(ctx, c.labelSelectorListOptions)

@@ -14,7 +14,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: cluster][negative] Cluster Can Reach Correct Status After Adapter Crash and Recovery",
 	ginkgo.Serial, // Serial: kills and restarts adapter pod, disrupts concurrent specs
-	ginkgo.Label(labels.Tier2, labels.Negative),
+	ginkgo.Label(labels.Tier2, labels.Negative, labels.Adapter),
 	func() {
 		var (
 			h                *helper.Helper

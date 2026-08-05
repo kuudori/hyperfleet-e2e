@@ -13,7 +13,7 @@ import (
 )
 
 var _ = ginkgo.Describe("[Suite: adapter-failures][negative] Adapter framework can detect and report failures to cluster API endpoints",
-	ginkgo.Label(labels.Tier1),
+	ginkgo.Label(labels.Tier1, labels.Adapter),
 	func() {
 		var (
 			h              *helper.Helper

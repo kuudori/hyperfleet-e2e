@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -15,7 +16,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Unable to Finalize Prevents Hard-Delete",
 	ginkgo.Serial, // Serial: deploys stuck adapter that blocks deletion of all clusters
-	ginkgo.Label(labels.Tier2, labels.Negative),
+	ginkgo.Label(labels.Tier2, labels.Negative, labels.Adapter),
 	func() {
 		var (
 			h                *helper.Helper
@@ -218,8 +219,8 @@ var _ = ginkgo.Describe("[Suite: cluster][negative] Stuck Deletion -- Adapter Un
 				Eventually(h.PollClusterHTTPStatus(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.Cfg.Polling.Interval).
 					Should(Equal(http.StatusNotFound))
 
-				ginkgo.By("Verify downstream K8s namespace is cleaned up")
-				Eventually(h.PollNamespacesByPrefix(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
+				ginkgo.By("Verify downstream K8s cl-stuck-<clusterID> namespace is cleaned up")
+				Eventually(h.PollNamespacesByPrefix(ctx, fmt.Sprintf("%s-%s", adapterName, clusterID)), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
 					Should(BeEmpty())
 
 				ginkgo.GinkgoWriter.Printf("Verified: stuck-adapter recovered, cluster hard-deleted\n")
