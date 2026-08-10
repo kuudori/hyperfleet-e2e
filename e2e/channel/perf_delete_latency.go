@@ -2,7 +2,6 @@ package channel
 
 import (
 	"context"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -14,37 +13,31 @@ import (
 
 var _ = ginkgo.Describe("[Suite: channel][perf] Delete latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
-		var channelID string
 
 		ginkgo.BeforeEach(func(ctx context.Context) {
 			h = helper.New()
-
-			channel, err := h.Client.CreateChannelFromPayload(ctx, h.TestDataPath("payloads/channels/channel-request.json"))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(channel.Id).NotTo(BeNil(), "channel ID should be set")
-			channelID = *channel.Id
-
-			ginkgo.DeferCleanup(func(ctx context.Context) {
-				if err := h.CleanupTestChannel(ctx, channelID); err != nil {
-					ginkgo.GinkgoWriter.Printf("Warning: failed to cleanup channel %s: %v\n", channelID, err)
-				}
-			})
 		})
 
 		ginkgo.It("should delete a channel within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("deleting channel and timing the response")
-			start := time.Now()
+			channelIDs := make([]string, helper.DefaultSamples)
+			for i := range channelIDs {
+				channel, err := h.Client.CreateChannelFromPayload(ctx, h.TestDataPath("payloads/channels/channel-request.json"))
+				Expect(err).NotTo(HaveOccurred())
+				Expect(channel.Id).NotTo(BeNil(), "channel ID should be set")
+				channelIDs[i] = *channel.Id
+				h.DeferChannelCleanup(*channel.Id)
+			}
 
-			deleted, err := h.Client.DeleteChannel(ctx, channelID)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(deleted.DeletedTime).NotTo(BeNil(), "deleted channel should have deleted_time set")
-			elapsed := time.Since(start)
-
-			ginkgo.GinkgoWriter.Printf("[PERF] DELETE /channels/%s latency: %v\n", channelID, elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIDelete),
-				"channel delete exceeded threshold")
+			helper.MeasureMedianLatency("DELETE /channels/{id}", config.ThresholdAPIDelete, len(channelIDs),
+				func(i int) {
+					deleted, err := h.Client.DeleteChannel(ctx, channelIDs[i])
+					Expect(err).NotTo(HaveOccurred())
+					Expect(deleted.DeletedTime).NotTo(BeNil(), "deleted channel should have deleted_time set")
+				},
+			)
 		})
 	},
 )

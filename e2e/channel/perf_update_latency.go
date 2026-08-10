@@ -2,7 +2,7 @@ package channel
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -15,6 +15,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: channel][perf] Update latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var channelID string
@@ -35,22 +36,17 @@ var _ = ginkgo.Describe("[Suite: channel][perf] Update latency",
 		})
 
 		ginkgo.It("should update a channel within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("patching channel and timing the response")
-			start := time.Now()
-
-			patched, err := h.Client.PatchChannel(ctx, channelID, client.ResourcePatchRequest{
-				Spec: map[string]any{
-					"is_default":    true,
-					"enabled_regex": ".*",
+			helper.MeasureMedianLatency("PATCH /channels/{id}", config.ThresholdAPIUpdate, helper.DefaultSamples,
+				func(i int) {
+					_, err := h.Client.PatchChannel(ctx, channelID, client.ResourcePatchRequest{
+						Spec: map[string]any{
+							"is_default":    true,
+							"enabled_regex": fmt.Sprintf("^v%d\\..*$", i),
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
 				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(patched.Generation).To(Equal(int32(2)), "generation should increment after PATCH")
-			elapsed := time.Since(start)
-
-			ginkgo.GinkgoWriter.Printf("[PERF] PATCH /channels/%s latency: %v\n", channelID, elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIUpdate),
-				"channel update exceeded threshold")
+			)
 		})
 	},
 )

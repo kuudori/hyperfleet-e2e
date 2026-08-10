@@ -2,7 +2,6 @@ package version
 
 import (
 	"context"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -14,6 +13,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: version][perf] API list latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var channelID string
@@ -40,14 +40,12 @@ var _ = ginkgo.Describe("[Suite: version][perf] API list latency",
 		})
 
 		ginkgo.It("should list versions within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("measuring GET /channels/{parent_id}/versions response time")
-			start := time.Now()
-			_, err := h.Client.ListVersions(ctx, channelID, "")
-			Expect(err).NotTo(HaveOccurred())
-			elapsed := time.Since(start)
-			ginkgo.GinkgoWriter.Printf("[PERF] GET /channels/%s/versions latency: %v\n", channelID, elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIList),
-				"GET /channels/{parent_id}/versions exceeded threshold")
+			helper.MeasureMedianLatency("GET /channels/{parent_id}/versions", config.ThresholdAPIList, helper.DefaultSamples,
+				func(int) {
+					_, err := h.Client.ListVersions(ctx, channelID, "")
+					Expect(err).NotTo(HaveOccurred())
+				},
+			)
 		})
 	},
 )

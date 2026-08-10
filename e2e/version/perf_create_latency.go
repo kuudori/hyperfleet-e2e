@@ -2,7 +2,6 @@ package version
 
 import (
 	"context"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -14,6 +13,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: version][perf] Create latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var channelID string
@@ -35,17 +35,14 @@ var _ = ginkgo.Describe("[Suite: version][perf] Create latency",
 		})
 
 		ginkgo.It("should create a version within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("creating a version and timing the response")
-			start := time.Now()
-
-			version, err := h.Client.CreateVersionFromPayload(ctx, channelID, h.TestDataPath("payloads/versions/version-request.json"))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(version.Id).NotTo(BeNil(), "version ID should be set")
-			elapsed := time.Since(start)
-
-			ginkgo.GinkgoWriter.Printf("[PERF] POST /channels/%s/versions latency: %v\n", channelID, elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPICreate),
-				"version create exceeded threshold")
+			helper.MeasureMedianLatency("POST /channels/{parent_id}/versions", config.ThresholdAPICreate, helper.DefaultSamples,
+				func(int) {
+					// No per-version cleanup: the channel's DeferCleanup above sweeps all its versions.
+					version, err := h.Client.CreateVersionFromPayload(ctx, channelID, h.TestDataPath("payloads/versions/version-request.json"))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(version.Id).NotTo(BeNil(), "version ID should be set")
+				},
+			)
 		})
 	},
 )

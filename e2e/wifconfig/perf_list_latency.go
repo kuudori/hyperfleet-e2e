@@ -2,7 +2,6 @@ package wifconfig
 
 import (
 	"context"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -14,6 +13,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: wifconfig][perf] API list latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var wifConfigID string
@@ -34,14 +34,12 @@ var _ = ginkgo.Describe("[Suite: wifconfig][perf] API list latency",
 		})
 
 		ginkgo.It("should list wifconfigs within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("measuring GET /wifconfigs response time")
-			start := time.Now()
-			_, err := h.Client.ListWifConfigs(ctx, "")
-			Expect(err).NotTo(HaveOccurred())
-			elapsed := time.Since(start)
-			ginkgo.GinkgoWriter.Printf("[PERF] GET /wifconfigs latency: %v\n", elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIList),
-				"GET /wifconfigs exceeded threshold")
+			helper.MeasureMedianLatency("GET /wifconfigs", config.ThresholdAPIList, helper.DefaultSamples,
+				func(int) {
+					_, err := h.Client.ListWifConfigs(ctx, "")
+					Expect(err).NotTo(HaveOccurred())
+				},
+			)
 		})
 	},
 )

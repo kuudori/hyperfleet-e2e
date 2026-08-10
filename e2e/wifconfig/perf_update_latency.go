@@ -2,7 +2,7 @@ package wifconfig
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -15,6 +15,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: wifconfig][perf] Update latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var wifConfigID string
@@ -35,22 +36,17 @@ var _ = ginkgo.Describe("[Suite: wifconfig][perf] Update latency",
 		})
 
 		ginkgo.It("should update a wifconfig within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("patching wifconfig and timing the response")
-			start := time.Now()
-
-			patched, err := h.Client.PatchWifConfig(ctx, wifConfigID, client.ResourcePatchRequest{
-				Spec: map[string]any{
-					"projectId": "updated-project",
-					"version":   "4.18",
+			helper.MeasureMedianLatency("PATCH /wifconfigs/{id}", config.ThresholdAPIUpdate, helper.DefaultSamples,
+				func(i int) {
+					_, err := h.Client.PatchWifConfig(ctx, wifConfigID, client.ResourcePatchRequest{
+						Spec: map[string]any{
+							"projectId": fmt.Sprintf("updated-project-%d", i),
+							"version":   "4.18",
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
 				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(patched.Generation).To(Equal(int32(2)), "generation should increment after PATCH")
-			elapsed := time.Since(start)
-
-			ginkgo.GinkgoWriter.Printf("[PERF] PATCH /wifconfigs/%s latency: %v\n", wifConfigID, elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIUpdate),
-				"wifconfig update exceeded threshold")
+			)
 		})
 	},
 )

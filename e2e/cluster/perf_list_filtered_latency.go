@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"net/url"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -15,6 +14,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: cluster][perf] API list latency with filters and pagination",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var clusterID string
@@ -35,37 +35,31 @@ var _ = ginkgo.Describe("[Suite: cluster][perf] API list latency with filters an
 		})
 
 		ginkgo.It("should list clusters with search filter within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("measuring GET /clusters?search=... response time")
 			filter := "labels.environment='test'"
-			start := time.Now()
-			_, err := h.Client.ListClustersWithParams(ctx, url.Values{"search": {filter}})
-			Expect(err).NotTo(HaveOccurred())
-			elapsed := time.Since(start)
-			ginkgo.GinkgoWriter.Printf("[PERF] GET /clusters (search filter) latency: %v\n", elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIList),
-				"GET /clusters with search filter exceeded threshold")
+			helper.MeasureMedianLatency("GET /clusters (search filter)", config.ThresholdAPIList, helper.DefaultSamples,
+				func(int) {
+					_, err := h.Client.ListClustersWithParams(ctx, url.Values{"search": {filter}})
+					Expect(err).NotTo(HaveOccurred())
+				},
+			)
 		})
 
 		ginkgo.It("should list clusters with page size limit within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("measuring GET /clusters?size=10 response time")
-			start := time.Now()
-			_, err := h.Client.ListClustersWithParams(ctx, url.Values{"size": {"10"}})
-			Expect(err).NotTo(HaveOccurred())
-			elapsed := time.Since(start)
-			ginkgo.GinkgoWriter.Printf("[PERF] GET /clusters (size=10) latency: %v\n", elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIList),
-				"GET /clusters with page size limit exceeded threshold")
+			helper.MeasureMedianLatency("GET /clusters (size=10)", config.ThresholdAPIList, helper.DefaultSamples,
+				func(int) {
+					_, err := h.Client.ListClustersWithParams(ctx, url.Values{"size": {"10"}})
+					Expect(err).NotTo(HaveOccurred())
+				},
+			)
 		})
 
 		ginkgo.It("should list clusters with pagination within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("measuring GET /clusters?page=1&size=10 response time")
-			start := time.Now()
-			_, err := h.Client.ListClustersWithParams(ctx, url.Values{"page": {"1"}, "size": {"10"}})
-			Expect(err).NotTo(HaveOccurred())
-			elapsed := time.Since(start)
-			ginkgo.GinkgoWriter.Printf("[PERF] GET /clusters (page=1, size=10) latency: %v\n", elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIList),
-				"GET /clusters with pagination exceeded threshold")
+			helper.MeasureMedianLatency("GET /clusters (page=1, size=10)", config.ThresholdAPIList, helper.DefaultSamples,
+				func(int) {
+					_, err := h.Client.ListClustersWithParams(ctx, url.Values{"page": {"1"}, "size": {"10"}})
+					Expect(err).NotTo(HaveOccurred())
+				},
+			)
 		})
 	},
 )
