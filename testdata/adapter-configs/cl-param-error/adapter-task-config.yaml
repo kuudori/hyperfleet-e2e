@@ -44,7 +44,7 @@ resources:
       apiVersion: v1
       kind: Namespace
       metadata:
-        name: "{{ .clusterId }}"
+        name: "{{ .adapter.name }}-{{ .clusterId }}"
         labels:
           hyperfleet.io/cluster-id: "{{ .clusterId }}"
           e2e.hyperfleet.io/ci: "{{ .ci }}"

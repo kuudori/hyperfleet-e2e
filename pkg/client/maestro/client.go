@@ -29,6 +29,17 @@ func toJSONBLabelSearch(key, value string) string {
 	return fmt.Sprintf("payload->'metadata'->'labels'@>'{%q:%q}'", key, value)
 }
 
+// toJSONBMultiLabelSearch creates a Maestro JSONB search query matching multiple labels.
+// Uses PostgreSQL JSON containment (@>) to match all provided label key=value pairs.
+// Example: {"cluster-id": "abc", "source-id": "adapter"} matches bundles with both labels.
+func toJSONBMultiLabelSearch(labels map[string]string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+	jsonBytes, _ := json.Marshal(labels)
+	return fmt.Sprintf("payload->'metadata'->'labels'@>'%s'", string(jsonBytes))
+}
+
 // Client provides methods to interact with the Maestro API
 type Client struct {
 	baseURL    string
@@ -143,13 +154,12 @@ func (c *Client) DeleteResourceBundle(ctx context.Context, id string) error {
 	return nil
 }
 
-// FindResourceBundleByClusterID finds a resource bundle by cluster ID label
-// Uses server-side filtering via Maestro's search parameter with JSONB syntax
-func (c *Client) FindResourceBundleByClusterID(ctx context.Context, clusterID string) (*ResourceBundle, error) {
+// FindResourcesByLabel finds all resource bundles matching a Maestro JSONB label search expression.
+func (c *Client) FindResourcesByLabel(ctx context.Context, labelQuery string) ([]ResourceBundle, error) {
 	apiURL := fmt.Sprintf("%s%s?search=%s",
 		c.baseURL,
 		resourceBundlesBasePath,
-		url.QueryEscape(toJSONBLabelSearch(client.KeyClusterID, clusterID)))
+		url.QueryEscape(labelQuery))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
@@ -173,106 +183,35 @@ func (c *Client) FindResourceBundleByClusterID(ctx context.Context, clusterID st
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
-
-	if len(result.Items) == 0 {
-		return nil, fmt.Errorf("no resource bundle found for cluster ID: %s", clusterID)
-	}
-
-	// Verify the result matches our cluster ID (defense in depth)
-	for i := range result.Items {
-		if result.Items[i].Metadata.Labels != nil &&
-			result.Items[i].Metadata.Labels[client.KeyClusterID] == clusterID {
-			return &result.Items[i], nil
-		}
-	}
-
-	return nil, fmt.Errorf("no resource bundle found for cluster ID: %s", clusterID)
+	// Trust the search query worked as expected
+	return result.Items, nil
 }
 
-// FindAllResourceBundlesByClusterID finds all resource bundles for a cluster ID
-// Returns all matching resource bundles (multiple adapters may create ManifestWorks for the same cluster)
-func (c *Client) FindAllResourceBundlesByClusterID(ctx context.Context, clusterID string) ([]ResourceBundle, error) {
-	apiURL := fmt.Sprintf("%s%s?search=%s",
-		c.baseURL,
-		resourceBundlesBasePath,
-		url.QueryEscape(toJSONBLabelSearch(client.KeyClusterID, clusterID)))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result ResourceBundleList
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// Filter and return all matching resource bundles
-	var bundles []ResourceBundle
-	for i := range result.Items {
-		if result.Items[i].Metadata.Labels != nil &&
-			result.Items[i].Metadata.Labels[client.KeyClusterID] == clusterID {
-			bundles = append(bundles, result.Items[i])
-		}
-	}
-
-	return bundles, nil
+// FindResourceBundlesByRunID finds all resource bundles created by a specific test run
+// Uses the e2e.hyperfleet.io/run-id label to filter by test runID
+func (c *Client) FindResourceBundlesByRunID(ctx context.Context, runID string) ([]ResourceBundle, error) {
+	return c.FindResourcesByLabel(ctx, toJSONBLabelSearch("e2e.hyperfleet.io/run-id", runID))
 }
 
 // FindResourceBundlesByAdapterName finds all resource bundles created by a specific adapter
 // Uses the maestro.io/source-id label to filter by adapter name
 func (c *Client) FindResourceBundlesByAdapterName(ctx context.Context, adapterName string) ([]ResourceBundle, error) {
-	apiURL := fmt.Sprintf("%s%s?search=%s",
-		c.baseURL,
-		resourceBundlesBasePath,
-		url.QueryEscape(toJSONBLabelSearch("maestro.io/source-id", adapterName)))
+	return c.FindResourcesByLabel(ctx, toJSONBLabelSearch("maestro.io/source-id", adapterName))
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
+// FindResourceBundlesByClusterID finds all resource bundles for a cluster ID
+// Uses the cluster ID label to filter by cluster ID
+func (c *Client) FindResourceBundlesByClusterID(ctx context.Context, clusterID string) ([]ResourceBundle, error) {
+	return c.FindResourcesByLabel(ctx, toJSONBLabelSearch(client.KeyClusterID, clusterID))
+}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result ResourceBundleList
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// Filter and return all matching resource bundles
-	var bundles []ResourceBundle
-	for i := range result.Items {
-		if result.Items[i].Metadata.Labels != nil &&
-			result.Items[i].Metadata.Labels["maestro.io/source-id"] == adapterName {
-			bundles = append(bundles, result.Items[i])
-		}
-	}
-
-	return bundles, nil
+// FindResourceBundlesByClusterAndAdapter finds all resource bundles for a specific cluster and adapter
+// Uses both cluster ID and adapter name labels in a single query
+func (c *Client) FindResourceBundlesByClusterAndAdapter(ctx context.Context, clusterID, adapterName string) ([]ResourceBundle, error) {
+	return c.FindResourcesByLabel(ctx, toJSONBMultiLabelSearch(map[string]string{
+		client.KeyClusterID:    clusterID,
+		"maestro.io/source-id": adapterName,
+	}))
 }
 
 // ListConsumers retrieves the list of registered Maestro consumers
