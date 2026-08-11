@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"context"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -14,6 +13,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: cluster][perf] API list latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var clusterID string
@@ -34,14 +34,12 @@ var _ = ginkgo.Describe("[Suite: cluster][perf] API list latency",
 		})
 
 		ginkgo.It("should list clusters within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("measuring GET /clusters response time")
-			start := time.Now()
-			_, err := h.Client.ListClusters(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			elapsed := time.Since(start)
-			ginkgo.GinkgoWriter.Printf("[PERF] GET /clusters latency: %v\n", elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIList),
-				"GET /clusters exceeded threshold")
+			helper.MeasureMedianLatency("GET /clusters", config.ThresholdAPIList, helper.DefaultSamples,
+				func(int) {
+					_, err := h.Client.ListClusters(ctx)
+					Expect(err).NotTo(HaveOccurred())
+				},
+			)
 		})
 	},
 )

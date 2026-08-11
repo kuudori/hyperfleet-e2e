@@ -328,10 +328,12 @@ Valid reasons to mark a spec `Serial`:
 
 - **Mutates shared infrastructure** (e.g., scales deployments, deletes shared resources)
 - **Deploys temporary adapters** that subscribe to all events, causing cross-talk with concurrent specs
+- **Asserts a millisecond-scale latency threshold**, where CPU contention from other parallel procs would inflate the measurement enough to flake the assertion
+- **Waits on a real timeout-bound condition** (e.g., reconciliation) whose duration is sensitive to concurrent create/reconcile load elsewhere in the suite - contention here risks an outright timeout failure, not just a skewed measurement
 
-Specs already marked `Serial`: sentinel scale-down, force-delete, stuck-deletion, crash-recovery, maestro-unavailability, adapter-failover, adapter-failure, maestro negative scenarios.
+Specs already marked `Serial`: sentinel scale-down, force-delete, stuck-deletion, crash-recovery, maestro-unavailability, adapter-failover, adapter-failure, maestro negative scenarios, and the 18 ms-scale channel/version/wifconfig/cluster perf spec files (list/create/update/delete/read latency; 22 individual specs, since the cluster list-with-filters file holds three and the cluster read-by-entity-size file holds three).
 
-Performance specs (`labels.Performance`) are a separate category - they carry no tier label and run in their own dedicated CI job (`--label-filter="perf"`) on a quiet system. They are not marked `Serial` because they never run alongside functional tests.
+Performance specs (`labels.Performance`) carry `labels.Tier1` like any other tier1 spec and run inside `tier1-nightly` alongside functional tests - there is no dedicated perf CI job. Ms-scale API perf specs (list/create/update/delete/read latency) are marked `Serial` for exactly this reason: without it, Ginkgo's parallel procs (`--procs=8`) contend for CPU and inflate latency measurements enough to flake the threshold assertions. The cluster read-by-entity-size specs carry a second reason: each waits on cluster reconciliation before reading, and reconciliation duration itself is sensitive to concurrent cluster create/reconcile load elsewhere in the suite. Second-scale reconciliation perf specs (which assert reconciliation time itself, not read latency) stay parallel since their larger thresholds already carry enough margin to absorb that contention.
 
 ## Adding New Tests
 

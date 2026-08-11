@@ -27,20 +27,19 @@ func GetSuiteConfig() *config.Config {
 	return suiteConfig
 }
 
-var _ = ginkgo.BeforeSuite(func(ctx ginkgo.SpecContext) {
-	cfg := GetSuiteConfig()
-	if cfg == nil {
-		log.Fatalf("Suite config not initialized")
-	}
+var _ = ginkgo.SynchronizedBeforeSuite(
+	// Process 1 only: mint the JWT token once and share it, so parallel
+	// processes don't each burn a redundant TokenRequest call at startup.
+	func(ctx ginkgo.SpecContext) []byte {
+		cfg := GetSuiteConfig()
+		if cfg == nil {
+			log.Fatalf("Suite config not initialized")
+		}
 
-	if err := logger.Init(&cfg.Log, "dev"); err != nil {
-		log.Fatalf("Failed to initialize logger: %v", err)
-	}
+		if !cfg.Identity.TokenRequest.IsEnabled() {
+			return nil
+		}
 
-	cfg.Display()
-	logger.Info("starting hyperfleet-e2e test suite - creating resources with", "run-id", cfg.RunID)
-
-	if cfg.Identity.TokenRequest.IsEnabled() {
 		k8s, err := k8sclient.NewClient()
 		if err != nil {
 			log.Fatalf("Failed to create K8s client for token acquisition: %v", err)
@@ -55,19 +54,39 @@ var _ = ginkgo.BeforeSuite(func(ctx ginkgo.SpecContext) {
 		if err != nil {
 			log.Fatalf("Failed to acquire JWT via TokenRequest: %v", err)
 		}
-		cfg.Identity.SetToken(token)
-		logger.Info("acquired JWT for suite",
-			"service-account", cfg.Identity.TokenRequest.Namespace+"/"+cfg.Identity.TokenRequest.ServiceAccountName,
-			"audience", cfg.Identity.TokenRequest.Audience,
-			"expires-seconds", cfg.Identity.TokenRequest.ExpirationSeconds)
-	}
+		return []byte(token)
+	},
+	// Runs on every process: apply the token minted above (if any) and finish suite setup.
+	func(ctx ginkgo.SpecContext, tokenBytes []byte) {
+		cfg := GetSuiteConfig()
+		if cfg == nil {
+			log.Fatalf("Suite config not initialized")
+		}
 
-	// Initialize adapter deployment list - for test tiers that deploy temporary adapters
-	adapterDeploymentList := helper.InitAdapterDeploymentList()
-	helper.SetAdapterDeploymentList(adapterDeploymentList)
+		if err := logger.Init(&cfg.Log, "dev"); err != nil {
+			log.Fatalf("Failed to initialize logger: %v", err)
+		}
 
-	logger.Info("starting hyperfleet-e2e test suite - each test creates temporary resources")
-})
+		if ginkgo.GinkgoParallelProcess() == 1 {
+			cfg.Display()
+		}
+		logger.Info("starting hyperfleet-e2e test suite - creating resources with", "run-id", cfg.RunID)
+
+		if len(tokenBytes) > 0 {
+			cfg.Identity.SetToken(string(tokenBytes))
+			logger.Info("acquired JWT for suite",
+				"service-account", cfg.Identity.TokenRequest.Namespace+"/"+cfg.Identity.TokenRequest.ServiceAccountName,
+				"audience", cfg.Identity.TokenRequest.Audience,
+				"expires-seconds", cfg.Identity.TokenRequest.ExpirationSeconds)
+		}
+
+		// Initialize adapter deployment list - for test tiers that deploy temporary adapters.
+		adapterDeploymentList := helper.InitAdapterDeploymentList()
+		helper.SetAdapterDeploymentList(adapterDeploymentList)
+
+		logger.Info("starting hyperfleet-e2e test suite - each test creates temporary resources")
+	},
+)
 
 var _ = ginkgo.SynchronizedAfterSuite(
 	// Per-process: sweep Pub/Sub resources. Safe to call from every process

@@ -183,6 +183,26 @@ func (h *Helper) CleanupTestWifConfig(ctx context.Context, wifConfigID string) e
 	return nil
 }
 
+// DeferChannelCleanup registers a DeferCleanup that will delete the channel after the test,
+// regardless of pass/fail. If cleanup fails, it logs a warning.
+func (h *Helper) DeferChannelCleanup(channelID string) {
+	ginkgo.DeferCleanup(func(ctx context.Context) {
+		if err := h.CleanupTestChannel(ctx, channelID); err != nil {
+			ginkgo.GinkgoWriter.Printf("Warning: failed to cleanup channel %s: %v\n", channelID, err)
+		}
+	})
+}
+
+// DeferWifConfigCleanup registers a DeferCleanup that will delete the wifconfig after the test,
+// regardless of pass/fail. If cleanup fails, it logs a warning.
+func (h *Helper) DeferWifConfigCleanup(wifConfigID string) {
+	ginkgo.DeferCleanup(func(ctx context.Context) {
+		if err := h.CleanupTestWifConfig(ctx, wifConfigID); err != nil {
+			ginkgo.GinkgoWriter.Printf("Warning: failed to cleanup wifconfig %s: %v\n", wifConfigID, err)
+		}
+	})
+}
+
 // ExpectedIdentity returns the configured expected audit identity value.
 // Returns empty string if not configured, signalling callers to skip audit assertions.
 func (h *Helper) ExpectedIdentity() string {

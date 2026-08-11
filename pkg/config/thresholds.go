@@ -31,8 +31,8 @@ const (
 // Calibrated from a GKE-dev baseline run (~1k seeded rows per kind, 2026-07-27);
 // observed latencies were 3-10ms across all three kinds, well under this shared
 // threshold — see hyperfleet/docs/performance-baselines.md in the architecture repo.
-// No Prow tier1-nightly baseline exists yet for these specific operations (the specs
-// are new); revisit this value once the first post-merge nightly run lands.
+// No Prow tier1-nightly baseline yet; recalibrate once 5+ clean nightly runs
+// are available now that these specs run Serial.
 const (
 	ThresholdAPICreate = 50 * time.Millisecond
 	ThresholdAPIUpdate = 50 * time.Millisecond

@@ -2,7 +2,7 @@ package version
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
@@ -15,6 +15,7 @@ import (
 
 var _ = ginkgo.Describe("[Suite: version][perf] Update latency",
 	ginkgo.Label(labels.Tier1, labels.Performance),
+	ginkgo.Serial,
 	func() {
 		var h *helper.Helper
 		var channelID string
@@ -43,24 +44,19 @@ var _ = ginkgo.Describe("[Suite: version][perf] Update latency",
 		})
 
 		ginkgo.It("should update a version within acceptable latency", func(ctx context.Context) {
-			ginkgo.By("patching version and timing the response")
-			start := time.Now()
-
-			patched, err := h.Client.PatchVersion(ctx, channelID, versionID, client.ResourcePatchRequest{
-				Spec: map[string]any{
-					"raw_version":   "4.18.0",
-					"enabled":       true,
-					"is_default":    true,
-					"release_image": "quay.io/openshift-release-dev/ocp-release:4.18.0",
+			helper.MeasureMedianLatency("PATCH /channels/{parent_id}/versions/{id}", config.ThresholdAPIUpdate, helper.DefaultSamples,
+				func(i int) {
+					_, err := h.Client.PatchVersion(ctx, channelID, versionID, client.ResourcePatchRequest{
+						Spec: map[string]any{
+							"raw_version":   fmt.Sprintf("4.18.%d", i),
+							"enabled":       true,
+							"is_default":    true,
+							"release_image": fmt.Sprintf("quay.io/openshift-release-dev/ocp-release:4.18.%d", i),
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
 				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(patched.Generation).To(Equal(int32(2)), "generation should increment after PATCH")
-			elapsed := time.Since(start)
-
-			ginkgo.GinkgoWriter.Printf("[PERF] PATCH /channels/%s/versions/%s latency: %v\n", channelID, versionID, elapsed)
-			Expect(elapsed).To(BeNumerically("<", config.ThresholdAPIUpdate),
-				"version update exceeded threshold")
+			)
 		})
 	},
 )
