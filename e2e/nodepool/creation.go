@@ -99,15 +99,18 @@ var _ = ginkgo.Describe("[Suite: nodepool][baseline] NodePool Resource Type Life
 
 							// Validate condition metadata for each condition
 							for _, condition := range adapter.Conditions {
-								g.Expect(condition.Reason).NotTo(BeNil(),
-									"adapter %s condition %s should have non-nil reason", adapter.Adapter, condition.Type)
-								g.Expect(*condition.Reason).NotTo(BeEmpty(),
-									"adapter %s condition %s should have non-empty reason", adapter.Adapter, condition.Type)
+								// architecture adapter-lifecycle-delete-design.md: when not deleting, Finalized=False "reason/message is meaningless".
+								if condition.Type != client.ConditionTypeFinalized || condition.Status != client.AdapterConditionStatusFalse {
+									g.Expect(condition.Reason).NotTo(BeNil(),
+										"adapter %s condition %s should have non-nil reason", adapter.Adapter, condition.Type)
+									g.Expect(*condition.Reason).NotTo(BeEmpty(),
+										"adapter %s condition %s should have non-empty reason", adapter.Adapter, condition.Type)
 
-								g.Expect(condition.Message).NotTo(BeNil(),
-									"adapter %s condition %s should have non-nil message", adapter.Adapter, condition.Type)
-								g.Expect(*condition.Message).NotTo(BeEmpty(),
-									"adapter %s condition %s should have non-empty message", adapter.Adapter, condition.Type)
+									g.Expect(condition.Message).NotTo(BeNil(),
+										"adapter %s condition %s should have non-nil message", adapter.Adapter, condition.Type)
+									g.Expect(*condition.Message).NotTo(BeEmpty(),
+										"adapter %s condition %s should have non-empty message", adapter.Adapter, condition.Type)
+								}
 
 								g.Expect(condition.LastTransitionTime).NotTo(BeZero(),
 									"adapter %s condition %s should have valid last_transition_time", adapter.Adapter, condition.Type)

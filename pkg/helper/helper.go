@@ -12,7 +12,6 @@ import (
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	k8sclient "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/maestro"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"log/slog"
 )
@@ -22,7 +21,6 @@ type Helper struct {
 	Cfg                   *config.Config
 	Client                *client.HyperFleetClient
 	K8sClient             *k8sclient.Client
-	MaestroClient         *maestro.Client
 	AdapterDeploymentList *AdapterDeploymentList
 }
 
@@ -48,7 +46,7 @@ func (h *Helper) GetTestCluster(ctx context.Context, payloadPath string) (string
 }
 
 // CleanupTestCluster deletes the test cluster via the HyperFleet API and waits for hard-delete (404).
-// The API DELETE owns the full cleanup lifecycle: adapter finalization, Maestro teardown, namespace deletion.
+// The API DELETE owns the full cleanup lifecycle: adapter finalization and removal of the resources the adapters created.
 func (h *Helper) CleanupTestCluster(ctx context.Context, clusterID string) error {
 	slog.Info("deleting cluster via API", "cluster_id", clusterID)
 
@@ -207,13 +205,4 @@ func (h *Helper) DeferWifConfigCleanup(wifConfigID string) {
 // Returns empty string if not configured, signalling callers to skip audit assertions.
 func (h *Helper) ExpectedIdentity() string {
 	return h.Cfg.Identity.ExpectedIdentity
-}
-
-// GetMaestroClient returns the Maestro client, initializing it lazily on first access
-// This avoids the overhead of K8s service discovery for test suites that don't use Maestro
-func (h *Helper) GetMaestroClient() *maestro.Client {
-	if h.MaestroClient == nil {
-		h.MaestroClient = maestro.NewClient("")
-	}
-	return h.MaestroClient
 }

@@ -45,7 +45,7 @@ A Tier0 failure means **core user operations are broken**. Users cannot complete
 | [Cluster deletion happy path](testcases/delete-cluster.md#test-title-cluster-deletion-happy-path----soft-delete-through-hard-delete) | Core lifecycle -- validates the complete delete path (soft-delete, adapter finalization, hard-delete) |
 | [Cluster update via PATCH triggers reconciliation](testcases/update-cluster.md#test-title-cluster-update-via-patch-triggers-reconciliation-and-reaches-reconciled) | Core lifecycle -- validates that spec changes propagate through the reconciliation pipeline |
 | [Adapter Dependency Relationships](testcases/cluster.md#test-title-clusters-resource-type---adapter-dependency-relationships-workflow-validation) | Platform guarantee -- validates that the workflow engine enforces adapter execution ordering |
-| [ManifestWork creation and status via Maestro](testcases/adapter-with-maestro-transport.md#test-title-adapter-can-create-manifestwork-and-report-status-via-maestro-transport) | Core transport -- validates the primary Maestro transport path that production adapters use |
+| [Resource creation and status through the applier](testcases/adapter-with-remote-transport.md#test-title-adapter-creates-a-clusters-resources-through-the-applier-and-reports-their-status) | Core transport -- validates the remote delivery path (desire store and applier) that production adapters use |
 
 ### Tier1 -- Major
 
@@ -71,7 +71,7 @@ A Tier1 failure means **important features are affected but core operations stil
 | [Cluster reflects adapter failure in top-level status](testcases/cluster.md#test-title-cluster-can-reflect-adapter-failure-in-top-level-status) | Error handling -- validates failure reporting, not the happy path. Core operations work; this tests that failures are visible |
 | [PATCH to soft-deleted cluster returns 409](testcases/delete-cluster.md#test-title-patch-to-soft-deleted-cluster-returns-409-conflict) | API contract -- validates rejection of invalid mutations. The delete path works; this tests that the API guards against misuse |
 | [Concurrent cluster creations without conflicts](testcases/concurrent-processing.md#test-title-system-can-process-concurrent-cluster-creations-without-resource-conflicts) | Secondary workflow -- concurrent creation is important but not the primary single-cluster path |
-| [ManifestWork apply fails for unregistered consumer](testcases/adapter-with-maestro-transport.md#test-title-manifestwork-apply-fails-when-targeting-unregistered-consumer) | Error handling -- validates graceful failure for a misconfigured adapter, not the normal transport path |
+| [Adapter reports undelivered desires while the applier is unavailable](testcases/adapter-with-remote-transport.md#test-title-adapter-reports-undelivered-desires-while-the-applier-is-unavailable) | Error handling -- validates that undelivered resources are never reported as applied, and that delivery recovers, not the normal transport path |
 | [Adapter statuses transition during update reconciliation](testcases/update-cluster.md#test-title-adapter-statuses-transition-during-update-reconciliation) | Secondary workflow -- validates intermediate state transitions, not the final converged state |
 | [Stuck deletion -- adapter unable to finalize](testcases/delete-cluster.md#test-title-stuck-deletion----adapter-unable-to-finalize-prevents-hard-delete) | Operational visibility -- adapter permanently fails to finalize, causing silent resource leak that compounds over time if undetected |
 
@@ -97,8 +97,9 @@ A Tier2 failure means **edge cases or rare scenarios don't work as expected**. T
 | Test Case | Why Tier2 |
 |-----------|-----------|
 | [Cluster reaches correct status after adapter crash and recovery](testcases/cluster.md#test-title-cluster-can-reach-correct-status-after-adapter-crash-and-recovery) | Infrastructure recovery -- involves killing adapter pods and verifying self-healing. Crashes are rare; operators can restart pods manually |
-| [Maestro server unavailability graceful handling](testcases/adapter-with-maestro-transport.md#test-title-adapter-can-handle-maestro-server-unavailability-gracefully) | Infrastructure recovery -- simulates Maestro outage. Server failures are rare and recoverable |
 | [Stuck deletion -- adapter unable to finalize prevents hard-delete](testcases/delete-cluster.md#test-title-stuck-deletion----adapter-unable-to-finalize-prevents-hard-delete) | Infrastructure recovery -- simulates adapter unavailability during deletion. Verifies system won't hard-delete prematurely and recovers when adapter returns |
+
+A transport-outage example, "desire store unavailable, then recovery", is planned as a follow-up under HYPERFLEET-1518, once the Postgres-backed desire store lands (see [remote transport coverage](testcases/adapter-with-remote-transport.md#overview)).
 
 ### Tier Decision Flowchart
 

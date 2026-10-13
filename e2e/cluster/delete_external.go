@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
 )
@@ -41,14 +45,45 @@ var _ = ginkgo.Describe("[Suite: cluster][delete] External K8s Resource Deletion
 			namespaces, err := h.K8sClient.FindNamespacesByPrefix(ctx, clusterID)
 			Expect(err).NotTo(HaveOccurred())
 
+			remote := helper.RemoteNamespace(clusterID)
+			hasRemote := slices.Contains(namespaces, remote)
 			for _, ns := range namespaces {
+				if ns == remote {
+					continue
+				}
 				err := h.K8sClient.DeleteNamespaceAndWait(ctx, ns)
 				Expect(err).NotTo(HaveOccurred(), "failed to delete namespace %s", ns)
 			}
 
-			ginkgo.By("verifying all namespaces are gone")
-			Eventually(h.PollNamespacesByPrefix(ctx, clusterID), h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).
-				Should(BeEmpty())
+			ginkgo.By("verifying all local namespaces are gone")
+			Eventually(func() ([]string, error) {
+				remaining, err := h.PollNamespacesByPrefix(ctx, clusterID)()
+				return slices.DeleteFunc(remaining, func(ns string) bool { return ns == remote }), err
+			}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(BeEmpty())
+
+			// The applier re-applies every desire on each pass, so an externally deleted
+			// remote object is recreated rather than staying gone. A new UID proves the
+			// recreation without having to observe the short NotFound window; while the old
+			// namespace is still Terminating, the GET returns its old UID.
+			if hasRemote {
+				original, err := h.K8sClient.FetchNamespace(ctx, remote)
+				Expect(err).NotTo(HaveOccurred())
+				ginkgo.GinkgoWriter.Printf("Remote namespace %s UID before delete: %s\n", remote, original.UID)
+				err = h.K8sClient.CoreV1().Namespaces().Delete(ctx, remote, metav1.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to delete namespace %s", remote)
+
+				ginkgo.By("verifying the applier recreates the remote namespace")
+				var recreated *corev1.Namespace
+				Eventually(func(g Gomega) {
+					ns, err := h.K8sClient.FetchNamespace(ctx, remote)
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(ns.UID).NotTo(Equal(original.UID), "namespace %s has not been recreated yet", remote)
+					g.Expect(kubernetes.HasNamespacePhase(ns, corev1.NamespaceActive)).To(BeTrue(),
+						"recreated namespace %s phase is %s, want Active", remote, ns.Status.Phase)
+					recreated = ns
+				}, h.Cfg.Timeouts.Adapter.Processing, h.Cfg.Polling.Interval).Should(Succeed())
+				ginkgo.GinkgoWriter.Printf("Remote namespace %s UID after recreate: %s\n", remote, recreated.UID)
+			}
 
 			ginkgo.By("sending DELETE through the API")
 			deletedCluster, err := h.Client.DeleteCluster(ctx, clusterID)

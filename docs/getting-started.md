@@ -5,7 +5,7 @@ New to HyperFleet E2E? This guide will help you run your first test in 10 minute
 ## Prerequisites
 
 - **Go 1.26+** - Required for building the framework
-- **HyperFleet deployment** - Running HyperFleet API and Maestro instance
+- **HyperFleet deployment** - A running HyperFleet stack (see [Setup Guide](setup.md))
 - **10 minutes** - Time to complete this guide
 
 > **Need to set up a HyperFleet environment first?** See the [Setup Guide](setup.md) for complete instructions using Kind (local) or GCP.
@@ -34,7 +34,6 @@ You should see the command help output.
 
 ```bash
 export HYPERFLEET_API_URL=<your-hyperfleet-api-url>
-export MAESTRO_URL=<your-maestro-url>
 export NAMESPACE=<your-deployment-namespace>
 ```
 
@@ -129,7 +128,6 @@ make check       # Run all checks (fmt, vet, lint, test)
 ```bash
 # Verify API URLs are set
 echo $HYPERFLEET_API_URL
-echo $MAESTRO_URL
 echo $NAMESPACE
 
 # Test connectivity
@@ -147,7 +145,7 @@ HYPERFLEET_TIMEOUTS_CLUSTER_RECONCILED=45m make e2e
 
 Priority order (highest to lowest):
 1. CLI flags (`--api-url`)
-2. Environment variables (`HYPERFLEET_API_URL`, `MAESTRO_URL`, `NAMESPACE`)
+2. Environment variables (`HYPERFLEET_API_URL`, `NAMESPACE`)
 3. Config file (`configs/config.yaml`)
 4. Built-in defaults
 

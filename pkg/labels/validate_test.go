@@ -57,13 +57,6 @@ func TestValidateLabels(t *testing.T) {
 		{name: "severity with optional labels", labels: []string{labels.Tier2, labels.Negative, labels.Disruptive}},
 		{name: "no labels", labels: nil, wantErr: "missing severity label"},
 		{name: "optional labels without severity", labels: []string{labels.Negative}, wantErr: "missing severity label"},
-		{name: "environment label replaces severity", labels: []string{labels.DesireTransport}},
-		{name: "environment label with optional labels", labels: []string{labels.DesireTransport, labels.Slow}},
-		{
-			name:    "environment label combined with severity",
-			labels:  []string{labels.DesireTransport, labels.Tier0},
-			wantErr: `environment label "desire-transport" must not be combined with a severity label`,
-		},
 	}
 
 	for _, tt := range tests {
@@ -254,8 +247,6 @@ func constantToLabelValue(constName string) string {
 		// Constraint
 		"Disruptive": labels.Disruptive,
 		"Slow":       labels.Slow,
-		// Environment
-		"DesireTransport": labels.DesireTransport,
 	}
 
 	return mapping[constName]

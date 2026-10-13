@@ -30,7 +30,6 @@ The environment guide covers:
 **Required environment variables** (set during environment setup):
 
 - `HYPERFLEET_API_URL` - HyperFleet API endpoint
-- `MAESTRO_URL` - Maestro API endpoint  
 - `NAMESPACE` - Deployment namespace
 - `source env/env.local` (Optional for tier 2 tests)
 
@@ -51,7 +50,6 @@ make build
 Make sure you've set the required environment variables from the [Prerequisites](#prerequisites) section:
 
 - `HYPERFLEET_API_URL`
-- `MAESTRO_URL`
 - `NAMESPACE`
 
 **Run tests by tier:**
@@ -214,8 +212,7 @@ Unexpected error:
 3. Verify services exist:
 
    ```bash
-   kubectl get svc -n maestro maestro
-   kubectl get svc -n ${NAMESPACE} hyperfleet-api
+   kubectl get svc -n ${NAMESPACE} hyperfleet-gateway
    ```
 
 ## CI Jobs

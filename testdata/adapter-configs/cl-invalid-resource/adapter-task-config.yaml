@@ -1,5 +1,7 @@
 # Test adapter configuration with invalid K8s resource to test error detection
 
+schema_version: "2.0"
+
 # Parameters with all required variables
 params:
     - name: "clusterId"
@@ -46,8 +48,6 @@ preconditions:
 # Resources with INVALID K8s manifest - this will cause API server rejection
 resources:
   - name: "invalidConfigMap"
-    transport:
-      client: "kubernetes"
     manifest:
       apiVersion: v1
       kind: ConfigMap

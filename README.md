@@ -23,9 +23,6 @@ HyperFleet E2E is a Ginkgo-based testing framework that validates HyperFleet clu
 
 # Exclude slow tests
 ./bin/hyperfleet-e2e test --label-filter="!slow"
-
-# Desire delivery without Maestro (needs the stack from Setup Guide, Option 3)
-./bin/hyperfleet-e2e test --label-filter=desire-transport
 ```
 
 ### Common Options

@@ -40,8 +40,8 @@ func TestGenerateAdapterReleaseName(t *testing.T) {
 		{
 			name:         "typical adapter name",
 			resourceType: "nodepools",
-			adapterName:  "maestro",
-			wantExact:    "adapter-nodepools-maestro",
+			adapterName:  "configmap",
+			wantExact:    "adapter-nodepools-configmap",
 			wantHashed:   false,
 		},
 		{
@@ -94,7 +94,7 @@ func TestGenerateAdapterReleaseName_Deterministic(t *testing.T) {
 		adapterName  string
 	}{
 		{"clusters", "foo"},
-		{"nodepools", "maestro"},
+		{"nodepools", "configmap"},
 		{"clusters", "my-very-long-adapter-name-that-exceeds-the-limit"},
 	}
 

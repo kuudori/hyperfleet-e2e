@@ -107,7 +107,7 @@ adapters:
     - "cl-namespace"
     - "cl-job"
     - "cl-deployment"
-    - "cl-maestro"
+    - "cl-desire"
 
   # Required adapters for nodepool resources
   # List of adapter names that must be present and have correct conditions
@@ -124,9 +124,9 @@ adapters:
 # ============================================================================
 
 desire:
-  # The only cluster adapter a desire stack deploys, on a remote transport. The
-  # desire-transport suite checks its Deployment, adapter config and status in
-  # place of adapters.cluster.
+  # The cluster adapter that delivers on a remote transport (desire store ->
+  # applier). It must also be listed in adapters.cluster: the remote-transport
+  # suite fails when it is not, so the tier suites always check the remote path.
   # Can be overridden by: HYPERFLEET_DESIRE_ADAPTER
   adapter: "cl-desire"
 

@@ -27,7 +27,7 @@ Run `make check` before you call work done, then `make build`.
 
 - Writing specs, full conventions: `docs/development.md`
 - Architecture and package layout: `docs/architecture.md`
-- Environment setup (kind, GCP, desire stack without Maestro): `docs/setup.md`
+- Environment setup (kind, GCP): `docs/setup.md`
 - Running tests, Prow jobs, label-to-CI mapping: `docs/runbook.md`
 - CI failures and log locations: `docs/debugging.md`
 - Test case documents and templates: `test-design/` (start at `test-design/README.md`)
@@ -65,7 +65,7 @@ Eventually(h.PollCluster(ctx, clusterID), h.Cfg.Timeouts.Cluster.Reconciled, h.C
 ### Cleanup
 
 - Register `ginkgo.DeferCleanup` right after you create each resource. Helpers such as `h.DeferClusterCleanup` exist in `pkg/helper/helper.go`.
-- Exception: in an `Ordered` container where a later spec uses a resource an earlier spec created, register the cleanup in `BeforeAll`. A `DeferCleanup` made inside an `It` runs when that `It` ends, before the later specs run. Say so in a comment, as `e2e/adapter/adapter_with_desire.go` does.
+- Exception: in an `Ordered` container where a later spec uses a resource an earlier spec created, register the cleanup in `BeforeAll`. A `DeferCleanup` made inside an `It` runs when that `It` ends, before the later specs run. Say so in a comment, as `e2e/adapter/adapter_with_remote_transport.go` does.
 
 ### Payloads
 

@@ -14,8 +14,7 @@ HyperFleet E2E is a Ginkgo-based black-box testing framework for validating Hype
 ```text
 pkg/
 ├── client/             - HyperFleet API client (generic HTTP)
-│   ├── kubernetes/     - Kubernetes client (client-go)
-│   └── maestro/        - Maestro resource bundle client
+│   └── kubernetes/     - Kubernetes client (client-go)
 ├── config/             - Configuration loading and validation
 ├── e2e/                - Test execution engine (Ginkgo)
 ├── helper/             - Test helpers (pollers, matchers, resource management)
@@ -128,13 +127,13 @@ Built-in Defaults (lowest priority)
 - Adapter deployment/uninstall via Helm
 
 **Key Types**:
-- `Helper` - Main struct with `Cfg`, `Client`, `K8sClient`, `MaestroClient`
+- `Helper` - Main struct with `Cfg`, `Client`, `K8sClient`, `AdapterDeploymentList`
 
 **Key Methods**:
 
 *Resource Management* (`helper.go`):
 - `GetTestCluster(ctx, payloadPath)` - Create temporary test cluster
-- `CleanupTestCluster(ctx, clusterID)` - Delete cluster, Maestro bundles, and namespaces
+- `CleanupTestCluster(ctx, clusterID)` - Delete the cluster through the API and wait for hard-delete (404); the adapters remove the resources they created
 - `GetTestNodePool(ctx, clusterID, payloadPath)` - Create nodepool
 
 *Pollers* (`pollers.go`) — thin functions returning current state for use with `Eventually`:

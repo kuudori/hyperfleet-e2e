@@ -2,6 +2,8 @@
 # The param-phase api_call references a non-existent service, causing the adapter
 # to fail before reaching the precondition/resource phases.
 
+schema_version: "2.0"
+
 # Parameters with all required variables
 params:
     - name: "clusterId"
@@ -38,8 +40,6 @@ preconditions: []
 # Resources (will never be reached due to precondition failure)
 resources:
   - name: "clusterNamespace"
-    transport:
-      client: "kubernetes"
     manifest:
       apiVersion: v1
       kind: Namespace

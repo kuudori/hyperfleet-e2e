@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
-	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/maestro"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper/helm"
 	"log/slog"
@@ -21,7 +20,6 @@ type CleanupHelper struct {
 	k8sClient                *kubernetes.Client
 	labelSelectorListOptions metav1.ListOptions
 	adapterDeploymentList    *AdapterDeploymentList
-	maestroClient            *maestro.Client
 }
 
 // NewCleanupHelper creates a new CleanupHelper
@@ -48,10 +46,7 @@ func NewCleanupHelper() (*CleanupHelper, error) {
 		LabelSelector: labelSelector,
 	}
 
-	// Create Maestro Client for cleanup workflow
-	maestroClient := maestro.NewClient("")
-
-	return &CleanupHelper{k8sClient: k8sClient, labelSelectorListOptions: labelSelectorListOptions, cfg: cfg, adapterDeploymentList: adapterDeploymentList, maestroClient: maestroClient}, nil
+	return &CleanupHelper{k8sClient: k8sClient, labelSelectorListOptions: labelSelectorListOptions, cfg: cfg, adapterDeploymentList: adapterDeploymentList}, nil
 }
 
 // CleanupPubSubResources sweeps Pub/Sub topics and subscriptions created by adapters
@@ -146,26 +141,8 @@ func (c *CleanupHelper) SweepPubsubTestAdapterResources(ctx context.Context) err
 func (c *CleanupHelper) SweepLabeledResources(ctx context.Context) error {
 	slog.Info("Starting robust test cleanup with label selector:", "labelSelector", c.labelSelectorListOptions.LabelSelector)
 
-	// Phase 1: Delete ResourceBundles Created by Run ID
-	// A run without Maestro (the desire-transport stack) has nothing to sweep here:
-	// the lookup fails, this phase logs "failed to get resource bundles by run Id",
-	// and the sweep continues. That error is expected on such runs. HYPERFLEET-1505
-	// removes this phase together with the Maestro client.
-	slog.Info("Phase 1: Best effort to delete Resource Bundles created by run ID")
-	if rbs, err := c.maestroClient.FindResourceBundlesByRunID(ctx, c.cfg.RunID); err == nil {
-		for _, rb := range rbs {
-			// Best effort deletion of resource bundles
-			err := c.maestroClient.DeleteResourceBundle(ctx, rb.ID)
-			if err != nil {
-				slog.Error("failed to delete resource bundle", "error", err)
-			}
-		}
-	} else {
-		slog.Error("failed to get resource bundles by run Id", "error", err)
-	}
-
-	// Phase 2: Delete resources (Background propagation - don't wait for cascade)
-	slog.Info("Phase 2: Best effort to delete resources")
+	// Phase 1: Delete resources (Background propagation - don't wait for cascade)
+	slog.Info("Phase 1: Best effort to delete resources")
 	if err := c.deleteJobs(ctx); err != nil {
 		slog.Error("failed to delete jobs", "error", err)
 	}
@@ -179,8 +156,8 @@ func (c *CleanupHelper) SweepLabeledResources(ctx context.Context) error {
 		slog.Error("failed to delete namespaces", "error", err)
 	}
 
-	// Phase 3: Wait for deletion to complete (poll until resources are gone or timeout)
-	slog.Info("Phase 3: Waiting for deletion to complete (polling for up to 3 minutes)")
+	// Phase 2: Wait for deletion to complete (poll until resources are gone or timeout)
+	slog.Info("Phase 2: Waiting for deletion to complete (polling for up to 3 minutes)")
 	err := wait.PollUntilContextTimeout(ctx, 1*time.Minute, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 		remaining, err := c.countRemainingResources(ctx)
 		if err != nil {

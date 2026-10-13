@@ -67,7 +67,7 @@ const (
 	// DefaultHyperfleetAPIBaseURL is the in-cluster base URL for the HyperFleet API.
 	DefaultHyperfleetAPIBaseURL = "http://hyperfleet-gateway:8000"
 
-	// DefaultDesireAdapter is the adapter the infra desire stack deploys (adapter-configs-desire)
+	// DefaultDesireAdapter is the remote-transport cluster adapter hyperfleet-infra deploys; it is one of adapters.cluster
 	DefaultDesireAdapter = "cl-desire"
 )
 

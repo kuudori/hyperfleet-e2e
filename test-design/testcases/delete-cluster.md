@@ -937,7 +937,7 @@ This test validates the adapter-side "NotFound as success" semantics. When the m
 | **Automation** | Automated |
 | **Version** | Post-MVP |
 | **Created** | 2026-04-16 |
-| **Updated** | 2026-04-28 |
+| **Updated** | 2026-10-13 |
 
 ---
 
@@ -984,6 +984,16 @@ kubectl get namespace {cluster_id}
 **Expected Result:**
 - `kubectl get` returns `NotFound` (or confirms namespace is in `Terminating` then fully gone)
 - Important: do **not** issue an API DELETE in this step -- the API still thinks the cluster is Reconciled
+
+**Remote namespace (`{cluster_id}-remote`, when a remote-transport adapter is configured):**
+- The applier re-applies every desire on each pass, so this namespace does not stay gone. Record its UID, delete it without waiting, and expect it back with a **different** UID and `status.phase: Active`:
+```bash
+kubectl get namespace {cluster_id}-remote -o jsonpath='{.metadata.uid}'
+kubectl delete namespace {cluster_id}-remote --wait=false
+kubectl get namespace {cluster_id}-remote -o jsonpath='{.metadata.uid} {.status.phase}'
+```
+- Compare UIDs rather than waiting for NotFound: the namespace may come back before a NotFound is observed. While the old namespace is still `Terminating`, the GET returns the old UID.
+- The API DELETE in Step 3 then removes the recreated namespace through the applier.
 
 #### Step 3: Send DELETE request through the API
 

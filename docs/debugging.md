@@ -232,15 +232,33 @@ flowchart TD
 
 In this example, `cl-job` is the stuck adapter — its `Available` is `False` with reason `JobRunning`. The cluster won't reach `Reconciled=True` until this adapter completes.
 
-### Adapter Execution Phases, Maestro, and Debug Commands
+### Adapter Execution Phases and Debug Commands
 
-For adapter execution phases (ParamExtraction → Preconditions → Resources → PostActions), Maestro/ManifestWork troubleshooting, RBAC checks, and error messages, see:
+For adapter execution phases (ParamExtraction → Preconditions → Resources → PostActions), RBAC checks, and error messages, see:
 
 - [Adapter runbook](https://github.com/openshift-hyperfleet/hyperfleet-adapter/blob/main/docs/runbook.md) — error messages, failure modes, and recovery procedures
 - [Adapter framework design](https://github.com/openshift-hyperfleet/architecture/blob/main/hyperfleet/components/adapter/framework/adapter-frame-design.md) — execution phases and architecture
-- [maestro-cli](https://github.com/openshift-hyperfleet/maestro-cli/) — terminal UI for inspecting Maestro resources
 
-**Note:** Maestro does not support OpenTelemetry — tracing stops at the gRPC boundary.
+### Remote Delivery (cl-desire, Redis, Applier)
+
+The remote adapter (`cl-desire`) does not write to Kubernetes. It writes desires to the Redis desire store, and the applier applies them and reports the live objects back through the store. When `cl-desire` is stuck with `Applied=Unknown` (reason `MirrorNotSynced`) or `Available=Unknown` (reason `GenerationPending`), the applier has not applied or reported the objects yet. Check the logs in this order:
+
+```bash
+# The remote adapter: did it write the desires?
+kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/instance=cl-desire --tail=200
+
+# The applier: did it apply them, and did it report status back?
+kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/instance=hyperfleet-applier --tail=200
+
+# The desire store: is it up, and does it accept connections?
+kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/instance=redis --tail=200
+
+# The objects the applier writes for a cluster
+kubectl get namespace <cluster-id>-remote
+kubectl get configmap cluster-config -n <cluster-id>-remote -o yaml
+```
+
+Redis has no persistence: when its pod restarts, every desire is lost until the adapter rewrites it on the next event.
 
 ---
 
@@ -276,7 +294,7 @@ make e2e
 
 ### Test Cleanup Flow
 
-Each test's `AfterEach` calls `CleanupTestCluster()` which deletes Maestro ManifestWorks then K8s namespaces. Errors are accumulated, not short-circuited. For the full cleanup lifecycle, see [architecture.md](architecture.md).
+Each test's cleanup calls `CleanupTestCluster()`, which deletes the cluster through the API and waits for the hard-delete (404); the adapters remove the resources they created, and `cl-desire` removes its remote objects through the applier. For the full cleanup lifecycle, see [architecture.md](architecture.md).
 
 ### Detecting Test Pollution
 
@@ -300,8 +318,9 @@ Check for orphaned resources:
 # Find orphaned namespaces
 kubectl get namespaces | grep -E '^e2e-|^test-'
 
-# Find orphaned ManifestWorks
-kubectl get appliedmanifestworks -A
+# Find orphaned remote namespaces (cl-desire): they carry no run-id label,
+# so the end-of-suite sweep does not find them
+kubectl get namespaces | grep -- '-remote$'
 
 # Check for leftover pods
 kubectl get pods -A | grep hyperfleet
@@ -315,18 +334,18 @@ kubectl delete namespace <namespace-name> --wait=true
 
 # Delete all test namespaces matching a pattern
 kubectl get namespaces -o name | grep 'e2e-test' | xargs kubectl delete
-
-# Delete ManifestWorks for a specific cluster
-kubectl delete appliedmanifestwork -n <namespace> --all
 ```
 
-#### Maestro resources
+#### Remote resources
 
-In case maestro DB is populated with many manifestworks, it can be time intensive to delete them all.
-Deleting the appliedmanifestworks k8s objects is not the solution, since maestro will recreate them from the DB data.
-In this case, it can be more convenient to uninstall maestro and install it again.
+While the cluster still exists in the API, the applier recreates a remote namespace you delete by hand: it re-applies every desire on each pass. Delete the cluster through the API first, then remove what is left.
 
-As reference, deleting 777 maestro entries took >30min in GKE prow cluster
+If a remote namespace is stuck in `Terminating`, check the `cluster-config` ConfigMap for the `e2e.hyperfleet.io/hold` finalizer that the remote-transport suite adds, and remove only that finalizer:
+
+```bash
+kubectl patch configmap cluster-config -n <cluster-id>-remote --type=strategic \
+  -p '{"metadata":{"$deleteFromPrimitiveList/finalizers":["e2e.hyperfleet.io/hold"]}}'
+```
 
 ### Deletion Flow (Production)
 

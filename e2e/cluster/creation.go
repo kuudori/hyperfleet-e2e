@@ -101,15 +101,18 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
 
 							// Validate condition metadata for each condition
 							for _, condition := range adapter.Conditions {
-								g.Expect(condition.Reason).NotTo(BeNil(),
-									"adapter %s condition %s should have non-nil reason", adapter.Adapter, condition.Type)
-								g.Expect(*condition.Reason).NotTo(BeEmpty(),
-									"adapter %s condition %s should have non-empty reason", adapter.Adapter, condition.Type)
+								// architecture adapter-lifecycle-delete-design.md: when not deleting, Finalized=False "reason/message is meaningless".
+								if condition.Type != client.ConditionTypeFinalized || condition.Status != client.AdapterConditionStatusFalse {
+									g.Expect(condition.Reason).NotTo(BeNil(),
+										"adapter %s condition %s should have non-nil reason", adapter.Adapter, condition.Type)
+									g.Expect(*condition.Reason).NotTo(BeEmpty(),
+										"adapter %s condition %s should have non-empty reason", adapter.Adapter, condition.Type)
 
-								g.Expect(condition.Message).NotTo(BeNil(),
-									"adapter %s condition %s should have non-nil message", adapter.Adapter, condition.Type)
-								g.Expect(*condition.Message).NotTo(BeEmpty(),
-									"adapter %s condition %s should have non-empty message", adapter.Adapter, condition.Type)
+									g.Expect(condition.Message).NotTo(BeNil(),
+										"adapter %s condition %s should have non-nil message", adapter.Adapter, condition.Type)
+									g.Expect(*condition.Message).NotTo(BeEmpty(),
+										"adapter %s condition %s should have non-empty message", adapter.Adapter, condition.Type)
+								}
 
 								g.Expect(condition.LastTransitionTime).NotTo(BeZero(),
 									"adapter %s condition %s should have valid last_transition_time", adapter.Adapter, condition.Type)
@@ -165,8 +168,9 @@ var _ = ginkgo.Describe("[Suite: cluster][baseline] Cluster Resource Type Lifecy
 			// 2. Validation of resource metadata (labels, annotations) and status
 			// 3. Final cluster state verification
 			//
-			// Note: Not all adapters create K8s resources (e.g., cl-maestro interacts with Maestro service).
-			// Adapters without K8s resources are verified via adapter status in "Basic Workflow Validation" test.
+			// Note: Not all adapters create K8s resources themselves (e.g., cl-desire delivers through the
+			// desire store and the applier). Such adapters are verified via adapter status in "Basic Workflow
+			// Validation" test; the remote-transport suite checks the objects the applier writes for cl-desire.
 			ginkgo.It("should create Kubernetes resources with correct templated values for adapters that create K8s resources",
 				func(ctx context.Context) {
 					ginkgo.By("Verify Kubernetes resources for each required adapter")

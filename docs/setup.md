@@ -7,7 +7,6 @@ This guide covers setting up a HyperFleet environment for running E2E tests loca
 - [Deployment Options](#deployment-options)
   - [Option 1: Kind (Local)](#option-1-kind-local)
   - [Option 2: GCP](#option-2-gcp)
-  - [Option 3: Kind with desire delivery (no Maestro)](#option-3-kind-with-desire-delivery-no-maestro)
 - [Configure Test Settings](#configure-test-settings)
 - [Troubleshooting](#troubleshooting)
 
@@ -23,8 +22,11 @@ cd hyperfleet-infra/terraform
 Choose one of the following deployment options based on your needs:
 
 - **Kind (local):** Fast setup, no cloud dependencies, uses port-forwarding
-- **GCP:** Cloud environment, requires GCP access, slower setup, uses LoadBalancer services
-- **Kind with desire delivery:** Kind without Maestro, for the `desire-transport` suite only
+- **GCP:** Cloud environment, requires GCP access, slower setup, uses a LoadBalancer service
+
+Both options deploy the desire delivery stack next to the adapters: Redis (the desire store), the applier, and the remote adapter `cl-desire`. The `remote-transport` suites need it ([test cases](../test-design/testcases/adapter-with-remote-transport.md)). See [Desire delivery](https://github.com/openshift-hyperfleet/hyperfleet-infra/blob/main/README.md#desire-delivery) in the hyperfleet-infra README.
+
+The tests reach the API through the gateway, `svc/hyperfleet-gateway`, which listens on plain HTTP on port 8000. `svc/hyperfleet-api` is ClusterIP-only and serves TLS to the gateway, so do not point the tests at it.
 
 ### Option 1: Kind (Local)
 
@@ -37,22 +39,16 @@ export NAMESPACE=<your-dev-namespace> ; export HELMFILE_ENV=e2e-kind ; make loca
 NAMESPACE=<your-dev-namespace> HELMFILE_ENV=e2e-kind make local-up-kind
 ```
 
-**2. Set up port-forwarding in two separate terminals:**
+**2. Port-forward the gateway:**
 
 ```bash
-# Terminal 1 - Port-forward Maestro API
-export MAESTRO_LOCAL_PORT=8100
-kubectl port-forward -n maestro svc/maestro ${MAESTRO_LOCAL_PORT}:8000
-
-# Terminal 2 - Port-forward HyperFleet API
 export API_LOCAL_PORT=8000
-kubectl port-forward -n ${NAMESPACE} svc/hyperfleet-api ${API_LOCAL_PORT}:8000
+kubectl port-forward -n ${NAMESPACE} svc/hyperfleet-gateway ${API_LOCAL_PORT}:8000
 ```
 
 **3. Configure environment variables:**
 
 ```bash
-export MAESTRO_URL=http://localhost:${MAESTRO_LOCAL_PORT}
 export HYPERFLEET_API_URL=http://localhost:${API_LOCAL_PORT}
 export NAMESPACE=<your-dev-namespace>
 ```
@@ -86,24 +82,22 @@ export NAMESPACE=<your-dev-namespace> ; export HELMFILE_ENV=e2e-gcp ; make local
 NAMESPACE=<your-dev-namespace> HELMFILE_ENV=e2e-gcp make local-up-gcp
 ```
 
-**2. Expose Maestro service via LoadBalancer:**
+**2. Wait for the gateway's external IP:**
+
+In `e2e-gcp`, `svc/hyperfleet-gateway` is a LoadBalancer.
 
 ```bash
-# Patch Maestro service to expose external IP
-kubectl patch svc maestro -n maestro -p '{"spec":{"type":"LoadBalancer"}}'
-
-# Wait for external IPs to be assigned (may take 1-2 minutes)
-kubectl get svc maestro -n maestro -w
-kubectl get svc hyperfleet-api -n ${NAMESPACE} -w
+# Wait for the external IP to be assigned (may take 1-2 minutes)
+kubectl get svc hyperfleet-gateway -n ${NAMESPACE} -w
 ```
+
+With `AUTH_MODE=EDGE` or `EDGE+API`, the gateway denies requests whose host it does not know. If requests through the LoadBalancer are denied, add its address to `AUTHORINO_HOSTS` when you deploy (see the hyperfleet-infra README).
 
 **3. Configure environment variables:**
 
 ```bash
-export API_EXTERNAL_IP=$(kubectl get svc hyperfleet-api -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-export MAESTRO_EXTERNAL_IP=$(kubectl get svc maestro -n maestro -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export API_EXTERNAL_IP=$(kubectl get svc hyperfleet-gateway -n ${NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 export HYPERFLEET_API_URL=http://${API_EXTERNAL_IP}:8000
-export MAESTRO_URL=http://${MAESTRO_EXTERNAL_IP}:8000
 export NAMESPACE=<your-dev-namespace>
 ```
 
@@ -119,42 +113,6 @@ kubectl get pods -n ${NAMESPACE}
 # Test API connectivity
 curl -f -X GET ${HYPERFLEET_API_URL}/api/hyperfleet/v1/clusters/
 ```
-
-### Option 3: Kind with desire delivery (no Maestro)
-
-Same as Option 1, except Redis and hyperfleet-applier replace Maestro. Use it only for the `desire-transport` suite ([test cases](../test-design/testcases/adapter-with-desire-transport.md)); the tier suites still need Option 1 or 2.
-
-**1. Deploy HyperFleet with desire delivery to a Kind cluster:**
-
-```bash
-NAMESPACE=<your-dev-namespace> HELMFILE_ENV=e2e-kind DESIRE_DELIVERY_ENABLED=true make local-up-kind
-```
-
-This deploys the API, the gateway, the Sentinels, one adapter `cl-desire`, Redis and the applier. Applier image and chart settings are in the [hyperfleet-infra README](https://github.com/openshift-hyperfleet/hyperfleet-infra/blob/main/README.md).
-
-**2. Port-forward the gateway:**
-
-```bash
-export API_LOCAL_PORT=8000
-kubectl port-forward -n ${NAMESPACE} svc/hyperfleet-gateway ${API_LOCAL_PORT}:8000
-```
-
-**3. Configure environment variables:**
-
-```bash
-export HYPERFLEET_API_URL=http://localhost:${API_LOCAL_PORT}
-export NAMESPACE=<your-dev-namespace>
-export RUN_ID=${NAMESPACE}
-```
-
-**4. Run the suite** (from the `hyperfleet-e2e` checkout, not `hyperfleet-infra`):
-
-```bash
-make build
-./bin/hyperfleet-e2e test --label-filter=desire-transport
-```
-
-At the end of the run, cleanup logs `failed to get resource bundles by run Id`. That is expected: the stack has no Maestro, and the rest of the cleanup still runs.
 
 ## Configure Test Settings
 

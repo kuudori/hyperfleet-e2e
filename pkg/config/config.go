@@ -201,14 +201,13 @@ func (c *IdentityConfig) SetToken(t string) {
 	c.token = t
 }
 
-// DesireConfig contains settings for suites that run on desire delivery
-// (adapter -> desire store -> applier) instead of Maestro.
+// DesireConfig contains settings for remote delivery
+// (adapter -> desire store -> applier).
 type DesireConfig struct {
-	// Adapter is the name of the one cluster adapter the desire stack deploys, on a remote
-	// transport. The tier stack deploys the Maestro adapter set (Adapters.Cluster, for
-	// example cl-namespace and cl-job), and the desire stack deploys none of them, so the
-	// desire-transport suite cannot use Adapters.Cluster. It uses this name to find the
-	// adapter's Deployment and adapter-config ConfigMap and to read its status from the API.
+	// Adapter is the name of the cluster adapter that delivers on a remote transport.
+	// It is one of Adapters.Cluster, so the tier suites check it like any other required
+	// adapter; the remote-transport suite asserts that and uses this name to read the
+	// adapter's status and the objects the applier wrote for it.
 	// The default matches the name hyperfleet-infra gives the adapter; change it only when
 	// the stack deploys the adapter under another name.
 	Adapter string `yaml:"adapter" mapstructure:"adapter"`
