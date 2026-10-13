@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	// remoteConfigMapName is the ConfigMap the example writes into helper.RemoteNamespace.
+	// remoteConfigMapName is the ConfigMap the remote adapter task writes into helper.RemoteNamespace.
 	remoteConfigMapName = "cluster-config"
 
 	// remoteHoldFinalizer holds the remote ConfigMap in deletion. The applier's server-side
@@ -135,11 +135,9 @@ var _ = ginkgo.Describe("[Suite: adapter][remote-transport] Adapter Framework - 
 				configMaps := h.K8sClient.CoreV1().ConfigMaps(remote)
 
 				ginkgo.By("holding the remote ConfigMap with a finalizer")
-				_, err := configMaps.Patch(ctx, remoteConfigMapName, types.StrategicMergePatchType,
-					addHoldFinalizerPatch, metav1.PatchOptions{})
-				Expect(err).NotTo(HaveOccurred(), "failed to add finalizer %s to ConfigMap %s/%s",
-					remoteHoldFinalizer, remote, remoteConfigMapName)
-				// A finalizer left behind would keep the Namespace in deletion for good.
+				// A finalizer left behind would keep the Namespace in deletion for good. Registered
+				// before the patch: a patch can be applied on the server and still return an error
+				// (e.g. a timeout), and removing a finalizer that is not there is a no-op.
 				ginkgo.DeferCleanup(func(ctx context.Context) {
 					_, err := configMaps.Patch(ctx, remoteConfigMapName, types.StrategicMergePatchType,
 						removeHoldFinalizerPatch, metav1.PatchOptions{})
@@ -148,6 +146,10 @@ var _ = ginkgo.Describe("[Suite: adapter][remote-transport] Adapter Framework - 
 							remoteHoldFinalizer, remote, remoteConfigMapName, err)
 					}
 				})
+				_, err := configMaps.Patch(ctx, remoteConfigMapName, types.StrategicMergePatchType,
+					addHoldFinalizerPatch, metav1.PatchOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to add finalizer %s to ConfigMap %s/%s",
+					remoteHoldFinalizer, remote, remoteConfigMapName)
 
 				ginkgo.By("soft-deleting the cluster")
 				deleted, err := h.Client.DeleteCluster(ctx, clusterID)

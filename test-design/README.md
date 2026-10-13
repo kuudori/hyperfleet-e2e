@@ -99,7 +99,7 @@ A Tier2 failure means **edge cases or rare scenarios don't work as expected**. T
 | [Cluster reaches correct status after adapter crash and recovery](testcases/cluster.md#test-title-cluster-can-reach-correct-status-after-adapter-crash-and-recovery) | Infrastructure recovery -- involves killing adapter pods and verifying self-healing. Crashes are rare; operators can restart pods manually |
 | [Stuck deletion -- adapter unable to finalize prevents hard-delete](testcases/delete-cluster.md#test-title-stuck-deletion----adapter-unable-to-finalize-prevents-hard-delete) | Infrastructure recovery -- simulates adapter unavailability during deletion. Verifies system won't hard-delete prematurely and recovers when adapter returns |
 
-A transport-outage example, "desire store unavailable, then recovery", is planned as a follow-up under HYPERFLEET-1518, once the Postgres-backed desire store lands (see [remote transport coverage](testcases/adapter-with-remote-transport.md#overview)).
+A transport-outage example, "desire store unavailable, then recovery", is planned in [HYPERFLEET-1771](https://redhat.atlassian.net/browse/HYPERFLEET-1771), once the Postgres-backed desire store lands (see [remote transport coverage](testcases/adapter-with-remote-transport.md#overview)).
 
 ### Tier Decision Flowchart
 

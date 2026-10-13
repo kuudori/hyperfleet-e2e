@@ -12,7 +12,7 @@
 
 The delivery chain under test: HyperFleet API → Sentinel → adapter on the `remote` transport → desire store (Redis) → hyperfleet-applier → Kubernetes. The adapter writes an ApplyDesire and a ReadDesire per resource. The applier applies the resource and copies the live object into the ReadDesire's status, and the adapter builds its conditions from that copy. On delete, the adapter replaces the ApplyDesire with a DeleteDesire, and the applier reports the object deleted only once it is gone.
 
-The adapter is `cl-desire` (config key `desire.adapter`), which runs the adapter repo's example [`charts/examples/remote-two-resources`](https://github.com/openshift-hyperfleet/hyperfleet-adapter/tree/main/charts/examples/remote-two-resources) unchanged. Its desires go to the store partition named after the run namespace. For a cluster `<id>` it manages:
+The adapter is `cl-desire` (config key `desire.adapter`). Its task config lives in hyperfleet-infra, [`helmfile/configs/base/adapters/remote/`](https://github.com/openshift-hyperfleet/hyperfleet-infra/tree/main/helmfile/configs/base/adapters/remote), and started from the adapter repo's example `charts/examples/remote-two-resources`. Its desires go to the store partition named after the run namespace. For a cluster `<id>` it manages:
 
 | Object | Desire identity (group / resource / namespace / name) |
 |--------|-------------------------------------------------------|
@@ -30,7 +30,7 @@ Coverage moved here from the retired transport suite:
 | Happy path: resources land on the target, status is read back | Test 1 |
 | Same generation causes no new write | Test 1, Step 5 |
 | Target nobody delivers to (unregistered consumer) | Test 3 |
-| Transport endpoint unavailable, then recovery | Not covered yet. A follow-up under HYPERFLEET-1518 adds "desire store unavailable, then recovery" once the Postgres-backed store and its API land |
+| Transport endpoint unavailable, then recovery | Not covered yet. [HYPERFLEET-1771](https://redhat.atlassian.net/browse/HYPERFLEET-1771) adds "desire store unavailable, then recovery" once the Postgres-backed store and its API land |
 
 Discovery misconfiguration, nested discovery and an unreachable status API were dropped: they are single-component adapter behaviour, covered by adapter tests, and `nested_discoveries` does not exist in v2 task configs.
 
@@ -51,7 +51,7 @@ export ADAPTER_NAME=cl-desire
 
 ### Description
 
-This test validates the create path end to end. Creating a cluster makes `cl-desire` hand its two objects to the applier through the store. The applier creates them and reports the live objects back, and the adapter builds its conditions from them, which lets the cluster reach `Reconciled=True`. `cl-desire` has no Kubernetes access of its own, so the objects on the cluster prove the applier created them. The shipped example reports `Available=True` only when the mirrored Namespace is `Active` and both generation annotations match, so `Available=True` proves the status was read back through the applier. The test then checks that the applier, which re-applies every desire on each pass, does not rewrite an object whose desire has not changed.
+This test validates the create path end to end. Creating a cluster makes `cl-desire` hand its two objects to the applier through the store. The applier creates them and reports the live objects back, and the adapter builds its conditions from them, which lets the cluster reach `Reconciled=True`. `cl-desire` has no Kubernetes access of its own, so the objects on the cluster prove the applier created them. The task config reports `Available=True` only when the mirrored Namespace is `Active` and both generation annotations match, so `Available=True` proves the status was read back through the applier. The test then checks that the applier, which re-applies every desire on each pass, does not rewrite an object whose desire has not changed.
 
 ---
 
@@ -107,7 +107,7 @@ curl -s ${API_URL}/api/hyperfleet/v1/clusters/${CLUSTER_ID}/statuses \
 
 **Expected Result:**
 - `observed_generation` equals the cluster generation (`1`)
-- `Applied`, `Available` and `Health` are `True` (reasons `ResourcesObserved`, `LiveResourcesReady`, `Healthy` in the shipped example)
+- `Applied`, `Available` and `Health` are `True` (reasons `ResourcesObserved`, `LiveResourcesReady`, `Healthy` in the task config)
 
 #### Step 4: Verify both objects exist on the cluster
 **Action:**
@@ -137,7 +137,7 @@ kubectl get configmap cluster-config -n ${CLUSTER_ID}-remote -o jsonpath='{.meta
 
 ### Description
 
-This test validates delete past finalizers. A finalizer on the remote ConfigMap holds its deletion open. While it is held, the applier keeps reporting the ConfigMap as pending, the example does not delete the parent Namespace, `cl-desire` does not report `Finalized=True`, and the API keeps the cluster. Once the finalizer is released, the applier confirms the delete, the adapter finalizes, and the API hard-deletes the cluster inside the status update that completes finalization. So after the 404, the Namespace check runs once, with no retry: a Namespace still there means the adapter finalized early, a product finding. Do not turn that check into polling.
+This test validates delete past finalizers. A finalizer on the remote ConfigMap holds its deletion open. While it is held, the applier keeps reporting the ConfigMap as pending, the task does not delete the parent Namespace, `cl-desire` does not report `Finalized=True`, and the API keeps the cluster. Once the finalizer is released, the applier confirms the delete, the adapter finalizes, and the API hard-deletes the cluster inside the status update that completes finalization. So after the 404, the Namespace check runs once, with no retry: a Namespace still there means the adapter finalized early, a product finding. Do not turn that check into polling.
 
 ---
 
@@ -231,7 +231,7 @@ kubectl get namespace ${CLUSTER_ID}-remote
 
 ### Description
 
-This test validates the remote path when nothing serves the target. With the applier scaled to 0, the adapter still writes its desires and runs successfully, but its read desires stay unsynced, so it cannot report its objects applied (`Applied=Unknown`, reason `MirrorNotSynced` in the shipped example). The cluster must not become Reconciled, and nothing may appear on the target. Once the applier is restored, the cluster must converge on its own, driven by the Sentinel's events while the cluster is not Reconciled.
+This test validates the remote path when nothing serves the target. With the applier scaled to 0, the adapter still writes its desires and runs successfully, but its read desires stay unsynced, so it cannot report its objects applied (`Applied=Unknown`, reason `MirrorNotSynced` in the task config). The cluster must not become Reconciled, and nothing may appear on the target. Once the applier is restored, the cluster must converge on its own, driven by the Sentinel's events while the cluster is not Reconciled.
 
 The spec is `Serial` and `Disruptive`: scaling down the shared applier blocks remote delivery for every other spec.
 
@@ -323,9 +323,9 @@ Each change below must turn the suite red. Never change an expected value to mak
 |--------|----------|
 | Scale the applier Deployment to 0 replicas | Test 1: `Reconciled` times out |
 | Remove `cl-desire` from `adapters.cluster` | Remote-transport suite `BeforeAll` |
-| Make the example's `Finalized` status expression `is_deleting && adapter.?executionStatus.orValue("") == "success"` in the `cl-desire` task-config ConfigMap and restart the adapter | Test 2: the cluster is hard-deleted while the ConfigMap is held |
+| Make the `Finalized` status expression `is_deleting && adapter.?executionStatus.orValue("") == "success"` in the `cl-desire` task-config ConfigMap and restart the adapter | Test 2: the cluster is hard-deleted while the ConfigMap is held |
 | Point the `remote-primary` transport's `target_cluster` at another literal | Test 1: the applier never sees the desires, so `Reconciled` times out |
-| Make the example report `Applied=True` whenever the adapter ran | Test 3: `Applied` is `True` with no applier |
+| Make the task config report `Applied=True` whenever the adapter ran | Test 3: `Applied` is `True` with no applier |
 
 ---
 
