@@ -15,11 +15,19 @@ const (
 // Cluster thresholds use a ~1.5x margin over baseline to absorb CI
 // run-to-run variance. NodePool thresholds use a ~2.25x margin because
 // their lower baselines make the same absolute jitter a higher percentage.
+//
+// The cluster update, delete and cascade-delete thresholds are raised ahead of
+// a rebaseline. Since the e2e API requires cl-desire, the remote adapter needs
+// extra sentinel rounds to see the applier's result: one on update, two on
+// delete (ConfigMap, then Namespace, then Finalized). Specs poll every 10s, so
+// readings land on 10s steps: update read 70s on kind, and every reconciled
+// cluster in the 2026-10-14 tier1-nightly took 50.2s from delete to hard-delete.
+// Recalibrate once Maestro is gone and the perf specs poll finer than 10s.
 const (
 	ThresholdClusterCreateReconciled  = 90 * time.Second // baseline ~60s
-	ThresholdClusterUpdateReconciled  = 60 * time.Second // baseline ~40s
-	ThresholdClusterDeleted           = 60 * time.Second // baseline ~40s
-	ThresholdClusterCascadeDeleted    = 75 * time.Second // baseline ~50s
+	ThresholdClusterUpdateReconciled  = 90 * time.Second // was 60s, baseline ~40s before cl-desire
+	ThresholdClusterDeleted           = 75 * time.Second // was 60s, baseline ~40s before cl-desire
+	ThresholdClusterCascadeDeleted    = 90 * time.Second // was 75s, baseline ~50s before cl-desire
 	ThresholdNodePoolCreateReconciled = 45 * time.Second // baseline ~20s
 	ThresholdNodePoolDeleted          = 45 * time.Second // baseline ~20s
 )
