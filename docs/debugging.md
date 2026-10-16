@@ -365,6 +365,7 @@ flowchart TD
         J0["tier0-nightly<br/>(blocks release)"]
         J1["tier1-nightly"]
         J2["tier2-nightly"]
+        JP["perf-nightly"]
     end
 
     subgraph RC["Release Candidate Jobs"]
@@ -372,12 +373,12 @@ flowchart TD
         R1["tier1-candidate<br/>(release-0.2)"]
     end
 
-    J0 & J1 & J2 & R0 & R1 --> WF
+    J0 & J1 & J2 & JP & R0 & R1 --> WF
 
     subgraph WF["Shared Workflow Steps"]
         direction TB
         S["1. Setup<br/>Deploy platform to GKE cluster<br/>Collect component logs"]
-        T["2. Test<br/>Run hyperfleet-e2e binary<br/>Filter by tier label"]
+        T["2. Test<br/>Run hyperfleet-e2e binary<br/>Filter by label"]
         C1["3a. Cleanup: cluster-resources<br/>Delete pods, namespaces"]
         C2["3b. Cleanup: cloud-provider<br/>Delete auto-created topics,<br/>subscriptions"]
 
@@ -394,8 +395,9 @@ flowchart TD
 | Job | Label Filter | Schedule |
 |-----|-------------|----------|
 | `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-tier0-nightly` | `tier0` | Daily |
-| `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-tier1-nightly` | `tier1` | Daily |
+| `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-tier1-nightly` | `tier1 && !perf` | Daily |
 | `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-tier2-nightly` | `tier2` | Daily |
+| `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-perf-nightly` | `perf` | Daily |
 
 **Release candidate jobs on `release-0.2`:**
 
@@ -409,7 +411,7 @@ The setup step deploys the HyperFleet platform to the shared GKE cluster, stores
 ### Finding and Viewing Job Results
 
 1. Navigate to the [Prow dashboard](https://prow.ci.openshift.org/)
-2. Filter by job name: `*hyperfleet-e2e-main-e2e-tier*` (matches all tier nightlies)
+2. Filter by job name: `*hyperfleet-e2e-main-e2e-*nightly` (matches all four nightlies)
 3. Click on the latest job run to view the build log
 4. Click **Artifacts** in the Prow job page to open the [GCS browser](https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com). Navigate to the workflow steps:
 
