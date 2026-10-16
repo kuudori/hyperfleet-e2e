@@ -421,7 +421,7 @@ The setup step deploys the HyperFleet platform to the shared GKE cluster, stores
    ├── artifacts/
    │   ├── ci-operator.log
    │   ├── junit_operator.xml
-   │   └── <tier>-nightly/                   # e.g. tier0-nightly, tier1-nightly
+   │   └── <name>-nightly/                   # e.g. tier1-nightly, perf-nightly
    │       ├── openshift-hyperfleet-e2e-setup/
    │       │   ├── build-log.txt             # Setup step log (deploy script output)
    │       │   └── artifacts/                # Component logs captured here
@@ -440,7 +440,9 @@ The setup step deploys the HyperFleet platform to the shared GKE cluster, stores
    └── build-logs/                           # Image build logs
    ```
 
-5. When a test fails, check `<tier>-nightly/openshift-hyperfleet-e2e-setup/artifacts/` for captured component logs — these show API, Sentinel, and Adapter output at the time of the test run
+   `perf-nightly` runs its own test step, so its test output is under `openshift-hyperfleet-e2e-test-perf/`, not `openshift-hyperfleet-e2e-test/`.
+
+5. When a test fails, check `<name>-nightly/openshift-hyperfleet-e2e-setup/artifacts/` for captured component logs — these show API, Sentinel, and Adapter output at the time of the test run
 
 ### Triggering a Manual Rerun
 
