@@ -399,6 +399,8 @@ flowchart TD
 | `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-tier2-nightly` | `tier2` | Daily |
 | `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-perf-nightly` | `perf` | Daily |
 
+The nightlies and `rc-e2e` do not build the `hyperfleet-e2e` image themselves: they import the last promoted `ci/hyperfleet-e2e:latest`. The setup step's `build-log.txt` names the commit that image was built from, so every run logs exactly which `main` revision it tested. When the promotion job `branch-ci-openshift-hyperfleet-hyperfleet-e2e-main-images-images` fails, it posts to `#hyperfleet-e2e-status` and the nightlies keep testing the previous image. To recover, rerun only the newest `main` promotion run — if a later merge has already promoted, do nothing: rerunning an older run puts its older commit back on `latest`.
+
 **Release candidate jobs on `release-0.2`:**
 
 | Job | Label Filter |
@@ -437,7 +439,7 @@ The setup step deploys the HyperFleet platform to the shared GKE cluster, stores
    │       │   └── build-log.txt
    │       └── openshift-hyperfleet-e2e-cleanup-cloud-provider/
    │           └── build-log.txt
-   └── build-logs/                           # Image build logs
+   └── build-logs/                           # Image build logs (PR jobs only; nightlies and rc-e2e import ci/hyperfleet-e2e:latest)
    ```
 
    `perf-nightly` runs its own test step, so its test output is under `openshift-hyperfleet-e2e-test-perf/`, not `openshift-hyperfleet-e2e-test/`.

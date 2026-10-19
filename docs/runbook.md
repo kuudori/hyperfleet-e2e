@@ -219,6 +219,8 @@ Unexpected error:
 
 The test cases you run locally are automatically picked up and executed in nightly CI jobs to ensure continuous validation of the system.
 
+The nightly jobs test the last promoted `main` image: they import `ci/hyperfleet-e2e:latest` instead of building the e2e image per run. The setup step logs the commit that image was built from, so a stale image is visible in every run's `build-log.txt`.
+
 **Job Configuration:** [openshift-hyperfleet-hyperfleet-e2e-main__e2e.yaml](https://github.com/openshift/release/blob/main/ci-operator/config/openshift-hyperfleet/hyperfleet-e2e/openshift-hyperfleet-hyperfleet-e2e-main__e2e.yaml)
 
 | Job Name | Test Tier | Schedule | Description |
@@ -246,6 +248,11 @@ To trigger the nightly or RC E2E jobs on demand via the Gangway API (including i
 All notable changes to this document are documented below.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+### 2026-10-19
+
+#### Changed
+- Documented that the nightly and `rc-e2e` jobs run the last promoted `ci/hyperfleet-e2e:latest` image instead of building it per run, and how to rerun a failed promotion safely
 
 ### 2026-06-10
 
