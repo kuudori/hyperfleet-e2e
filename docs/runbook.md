@@ -219,7 +219,7 @@ Unexpected error:
 
 The test cases you run locally are automatically picked up and executed in nightly CI jobs to ensure continuous validation of the system.
 
-The nightly jobs test the last promoted `main` image: they import `ci/hyperfleet-e2e:latest` instead of building the e2e image per run. The setup step logs the commit that image was built from, so a stale image is visible in every run's `build-log.txt`.
+The nightly jobs test the last promoted `main` image: they import `ci/hyperfleet-e2e:latest` instead of building the e2e image per run. The setup step's `build-log.txt` names the commit that image was built from, so a stale image shows up there. A run that sets `MULTISTAGE_PARAM_OVERRIDE_E2E_REF` builds the test binary from that ref instead, and the test step's `build-log.txt` names the commit it built.
 
 **Job Configuration:** [openshift-hyperfleet-hyperfleet-e2e-main__e2e.yaml](https://github.com/openshift/release/blob/main/ci-operator/config/openshift-hyperfleet/hyperfleet-e2e/openshift-hyperfleet-hyperfleet-e2e-main__e2e.yaml)
 

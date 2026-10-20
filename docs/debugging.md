@@ -399,7 +399,7 @@ flowchart TD
 | `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-tier2-nightly` | `tier2` | Daily |
 | `periodic-ci-openshift-hyperfleet-hyperfleet-e2e-main-e2e-perf-nightly` | `perf` | Daily |
 
-The nightlies and `rc-e2e` do not build the `hyperfleet-e2e` image themselves: they import the last promoted `ci/hyperfleet-e2e:latest`. The setup step's `build-log.txt` names the commit that image was built from, so every run logs exactly which `main` revision it tested. When the promotion job `branch-ci-openshift-hyperfleet-hyperfleet-e2e-main-images-images` fails, it posts to `#hyperfleet-e2e-status` and the nightlies keep testing the previous image. To recover, rerun only the newest `main` promotion run — if a later merge has already promoted, do nothing: rerunning an older run puts its older commit back on `latest`.
+The nightlies and `rc-e2e` do not build the `hyperfleet-e2e` image themselves: they import the last promoted `ci/hyperfleet-e2e:latest`. The setup step's `build-log.txt` names the commit that image was built from, or logs a warning if the image has no commit label. A run that sets `MULTISTAGE_PARAM_OVERRIDE_E2E_REF` builds the test binary from that ref instead of using the image, and the test step's `build-log.txt` names the commit it built. When the promotion job `branch-ci-openshift-hyperfleet-hyperfleet-e2e-main-images-images` fails, it posts to `#hyperfleet-e2e-status` and the nightlies keep testing the previous image. To recover, rerun only the newest `main` promotion run — if a later merge has already promoted, do nothing: rerunning an older run puts its older commit back on `latest`.
 
 **Release candidate jobs on `release-0.2`:**
 
