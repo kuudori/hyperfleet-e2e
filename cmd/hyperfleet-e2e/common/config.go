@@ -3,7 +3,6 @@ package common
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/spf13/viper"
@@ -28,17 +27,8 @@ func LoadConfig(configFlagValue string) error {
 		}
 	}
 
-	// 3. Enable environment variable support (AFTER reading config file)
-	viper.SetEnvPrefix(config.EnvPrefix)
-	viper.AutomaticEnv() // Enable automatic environment variable checking
-
-	// Replace dots with underscores in env var names
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-
-	// 4. Automatically bind all config paths to environment variables, including
-	// the API_ADAPTERS_CLUSTER/API_ADAPTERS_NODEPOOL and AUTH_MODE aliases
-	// This uses reflection to traverse the Config struct and bind all paths
-	// Binding AFTER reading config ensures env vars override config file values
+	// 3. Enable HYPERFLEET_* environment variables and the API_ADAPTERS_* and
+	// AUTH_MODE aliases; env vars override config file values
 	config.BindEnvVars()
 
 	return nil
