@@ -144,13 +144,18 @@ func sharedTimeoutKeys() []string {
 //   - a non-zero timeout replaces that one field.
 //
 // It fails on a kind or timeout field that is not in the table, such as the typo
-// timeouts.nodepools, which viper would otherwise ignore.
+// timeouts.nodepools, and on a scalar or list where a map belongs, such as
+// timeouts.cluster: 5m. Viper would otherwise ignore both.
 func loadEntityCatalog() (*descriptor.Catalog, error) {
 	rows := EntityDescriptors()
 	keys := entityKeys()
 	shared := sharedTimeoutKeys()
 	for _, section := range []string{"adapters", "timeouts"} {
-		for _, key := range slices.Sorted(maps.Keys(viper.GetStringMap(section))) {
+		values, err := viperMap(section)
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range slices.Sorted(maps.Keys(values)) {
 			if !slices.Contains(keys, key) && (section != "timeouts" || !slices.Contains(shared, key)) {
 				return nil, fmt.Errorf("unknown kind %q under %s; valid kinds: %s", key, section, strings.Join(keys, ", "))
 			}
@@ -166,7 +171,11 @@ func loadEntityCatalog() (*descriptor.Catalog, error) {
 			}
 		}
 		fields := timeoutFields(&row.Timeouts)
-		for _, name := range slices.Sorted(maps.Keys(viper.GetStringMap("timeouts." + key))) {
+		values, err := viperMap("timeouts." + key)
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range slices.Sorted(maps.Keys(values)) {
 			if fields[name] == nil {
 				return nil, fmt.Errorf("unknown field %q under timeouts.%s; valid fields: %s",
 					name, key, strings.Join(slices.Sorted(maps.Keys(fields)), ", "))
@@ -184,6 +193,20 @@ func loadEntityCatalog() (*descriptor.Catalog, error) {
 		}
 	}
 	return descriptor.NewCatalog(rows)
+}
+
+// viperMap reads the map at path, or nil when it is not set. It fails on a scalar
+// or a list, such as timeouts.cluster: 5m, which GetStringMap would turn into an
+// empty map and so hide from the key checks.
+func viperMap(path string) (map[string]any, error) {
+	switch value := viper.Get(path).(type) {
+	case nil:
+		return nil, nil
+	case map[string]any:
+		return value, nil
+	default:
+		return nil, fmt.Errorf("%s must be a map, got %v", path, value)
+	}
 }
 
 // viperStringSlice reads a string list. A string (as an env var gives) is split

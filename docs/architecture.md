@@ -173,7 +173,8 @@ uses the same catalog. Config keys are the kind in lower case:
 
 `Load()` fails before the suite starts on a YAML key that names no table kind
 (for example the typo `timeouts.nodepools`), an unknown field under
-`timeouts.<kind>`, a timeout string that is not a duration (such as `"300"`, with
+`timeouts.<kind>`, a scalar or list where a map belongs (such as
+`timeouts.cluster: 5m`), a timeout string that is not a duration (such as `"300"`, with
 no unit), and an empty adapter list. Env vars
 for an unknown kind are not checked. `descriptor.NewCatalog` then checks each
 row (`EntityDescriptor.Validate`), so `Load()` also fails on a negative timeout

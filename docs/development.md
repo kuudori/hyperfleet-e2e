@@ -266,7 +266,8 @@ timeouts:
 
 The env forms are `HYPERFLEET_ADAPTERS_PARENT` (comma-separated) and
 `HYPERFLEET_TIMEOUTS_PARENT_RECONCILED` / `_DELETED`. Loading fails on a YAML key
-that is not a table kind or timeout field, a timeout string without a unit, an empty
+that is not a table kind or timeout field, a scalar or list where a map belongs
+(`timeouts.cluster: 5m`), a timeout string without a unit, an empty
 adapter list, a negative timeout, and a row with adapters and no reconciled
 timeout. A row that waits for hard-delete needs a positive deleted timeout in the
 table; a missing or zero config value keeps that default. Thresholds

@@ -451,6 +451,21 @@ func TestUnknownEntityKeyFails(t *testing.T) {
 			configYAML: "timeouts:\n  cluster:\n    reconciled: \"300\"\n",
 			wantErr:    "timeouts.cluster.reconciled:",
 		},
+		{
+			name:       "kind timeouts as a scalar",
+			configYAML: "timeouts:\n  cluster: 5m\n",
+			wantErr:    "timeouts.cluster must be a map, got 5m",
+		},
+		{
+			name:       "kind timeouts as a list",
+			configYAML: "timeouts:\n  cluster: [5m]\n",
+			wantErr:    "timeouts.cluster must be a map, got [5m]",
+		},
+		{
+			name:       "adapters as a list",
+			configYAML: "adapters: [cl-namespace]\n",
+			wantErr:    "adapters must be a map, got [cl-namespace]",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
