@@ -344,6 +344,12 @@ func TestEntityAdapterKeys(t *testing.T) {
 			want: []string{"a", "b"},
 		},
 		{
+			name: "env var splits a whitespace-separated list",
+			env:  map[string]string{"HYPERFLEET_ADAPTERS_PARENT": "a b\tc"},
+			kind: "Parent",
+			want: []string{"a", "b", "c"},
+		},
+		{
 			name: "API_ADAPTERS_CLUSTER alias",
 			env:  map[string]string{"API_ADAPTERS_CLUSTER": "alias-a,alias-b"},
 			kind: "Cluster",
@@ -472,6 +478,46 @@ func TestUnknownEntityKeyFails(t *testing.T) {
 			_, err := loadConfigResult(t, writeConfigFile(t, tt.configYAML), nil)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("Load error = %v, want it to contain %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// A bare YAML number where a duration belongs fails like a string without a unit,
+// for the per-kind timeouts and the shared durations alike, instead of becoming
+// nanoseconds.
+func TestBareNumberDurationFails(t *testing.T) {
+	tests := []struct {
+		name       string
+		configYAML string
+		wantErr    string
+	}{
+		{
+			name:       "kind timeout",
+			configYAML: "timeouts:\n  cluster:\n    reconciled: 300\n",
+			wantErr:    "timeouts.cluster.reconciled:",
+		},
+		{
+			name:       "kind timeout as a float",
+			configYAML: "timeouts:\n  nodepool:\n    deleted: 1.5\n",
+			wantErr:    "timeouts.nodepool.deleted:",
+		},
+		{
+			name:       "polling interval",
+			configYAML: "polling:\n  interval: 300\n",
+			wantErr:    "duration 300 has no unit",
+		},
+		{
+			name:       "adapter processing timeout",
+			configYAML: "timeouts:\n  adapter:\n    processing: 300\n",
+			wantErr:    "duration 300 has no unit",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := loadConfigResult(t, writeConfigFile(t, tt.configYAML), nil)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) || !strings.Contains(err.Error(), "has no unit") {
+				t.Fatalf("Load error = %v, want it to contain %q and %q", err, tt.wantErr, "has no unit")
 			}
 		})
 	}

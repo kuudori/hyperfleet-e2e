@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/descriptor"
@@ -317,7 +319,7 @@ func Load() (*Config, error) {
 	// Use Unmarshal (not UnmarshalExact) to allow runtime test parameters (tests.*)
 	// to coexist with persistent configuration. Test parameters (label-filter, focus, skip)
 	// are set via flags/env vars and should not appear in config files.
-	if err := viper.Unmarshal(cfg); err != nil {
+	if err := viper.Unmarshal(cfg, rejectBareDurations); err != nil {
 		return nil, fmt.Errorf("configuration error: %w\nPlease check your config file", err)
 	}
 
@@ -344,6 +346,31 @@ func Load() (*Config, error) {
 // IsDryRun reports whether the CLI is listing tests without executing them.
 func IsDryRun() bool {
 	return viper.GetBool(Tests.GinkgoDryRun)
+}
+
+// rejectBareDurations makes a non-zero number fail where a duration belongs, as a
+// string without a unit already does. Viper would decode YAML interval: 300 as
+// 300ns. Zero stays allowed, since it keeps a default. It runs before viper's own
+// hooks, which parse duration strings.
+func rejectBareDurations(c *mapstructure.DecoderConfig) {
+	durationType := reflect.TypeFor[time.Duration]()
+	c.DecodeHook = mapstructure.ComposeDecodeHookFunc(
+		func(from, to reflect.Type, data any) (any, error) {
+			if to != durationType || from == durationType {
+				return data, nil
+			}
+			switch from.Kind() {
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+				reflect.Float32, reflect.Float64:
+				if !reflect.ValueOf(data).IsZero() {
+					return nil, fmt.Errorf("duration %v has no unit; write it with one, such as %vs", data, data)
+				}
+			}
+			return data, nil
+		},
+		c.DecodeHook,
+	)
 }
 
 // BindEnvVars makes viper read HYPERFLEET_* env vars: api.url -> HYPERFLEET_API_URL.

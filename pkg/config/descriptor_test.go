@@ -48,7 +48,7 @@ func TestEntityCatalogOverlaysConfigOnRowDefaults(t *testing.T) {
 	if !slices.Equal(np.RequiredAdapters, []string{"np-configmap"}) {
 		t.Errorf("NodePool adapters = %q, want the row default", np.RequiredAdapters)
 	}
-	if np.Timeouts != (descriptor.EntityTimeouts{Reconciled: 5 * time.Minute, Deleted: 61 * time.Second}) {
+	if np.Timeouts != (descriptor.EntityTimeouts{Reconciled: defaultEntityTimeouts.Reconciled, Deleted: 61 * time.Second}) {
 		t.Errorf("NodePool timeouts = %+v, want deleted overridden and reconciled at the default", np.Timeouts)
 	}
 	if p := catalog.MustGet("Parent"); !slices.Equal(p.RequiredAdapters, []string{"p-success"}) || p.Timeouts != defaultEntityTimeouts {
@@ -78,7 +78,7 @@ func TestEntityCatalogRowDefaults(t *testing.T) {
 	}
 	for kind, want := range map[string]descriptor.EntityTimeouts{
 		"Cluster":      {Reconciled: 2 * time.Minute, Deleted: 2 * time.Minute},
-		"NodePool":     {Reconciled: 5 * time.Minute, Deleted: 2 * time.Minute},
+		"NodePool":     {Reconciled: 2 * time.Minute, Deleted: 2 * time.Minute},
 		"Parent":       {Reconciled: 2 * time.Minute, Deleted: 2 * time.Minute},
 		"CascadeChild": {Reconciled: 2 * time.Minute, Deleted: 2 * time.Minute},
 	} {
@@ -187,6 +187,11 @@ func TestEntityRuntimeValidation(t *testing.T) {
 			wantErr: "missing unit in duration",
 		},
 		{
+			name:    "timeout as a bare number",
+			values:  map[string]any{"timeouts.cluster.reconciled": 300},
+			wantErr: "duration 300 has no unit",
+		},
+		{
 			name: "valid overrides",
 			values: map[string]any{
 				"adapters.channel":            []string{"ch-adapter"},
@@ -290,7 +295,7 @@ func TestEntityLogAttrsKeepFlatKeys(t *testing.T) {
 		"adapters_nodepool":           []string{"np-configmap"},
 		"timeout_cluster_reconciled":  2 * time.Minute,
 		"timeout_cluster_deleted":     2 * time.Minute,
-		"timeout_nodepool_reconciled": 5 * time.Minute,
+		"timeout_nodepool_reconciled": 2 * time.Minute,
 		"timeout_nodepool_deleted":    2 * time.Minute,
 	} {
 		if !reflect.DeepEqual(got[key], want) {

@@ -159,23 +159,24 @@ derived from parent plural, parent ID and plural.
 validates the catalog once, and stores it in `Config.Entities`; `helper.New()`
 uses the same catalog. Config keys are the kind in lower case:
 
-- `adapters.<kind>` or `HYPERFLEET_ADAPTERS_<KIND>` (comma-separated) replaces the
+- `adapters.<kind>` or `HYPERFLEET_ADAPTERS_<KIND>` (comma- or space-separated) replaces the
   row's adapter list. Blank names are dropped, and the list must name at least
   one adapter; remove the key to keep the default. `API_ADAPTERS_CLUSTER` and `API_ADAPTERS_NODEPOOL` are
   aliases for the cluster and nodepool keys until the per-kind suites go.
 - `timeouts.<kind>.reconciled` / `.deleted`, or
   `HYPERFLEET_TIMEOUTS_<KIND>_RECONCILED` / `_DELETED`, replaces one field; a
   missing or zero value keeps the row default. Values decode like every other
-  duration in the config: a string needs a unit (`90s`, `5m`), and a bare YAML
-  number is read as nanoseconds. The keys `TimeoutsConfig` owns, such as `timeouts.adapter.processing`,
+  duration in the config: a value needs a unit (`90s`, `5m`), and a bare YAML
+  number other than zero fails. The keys `TimeoutsConfig` owns, such as `timeouts.adapter.processing`,
   are shared, not per kind.
 - Thresholds are code in the row and have no config key.
 
 `Load()` fails before the suite starts on a YAML key that names no table kind
 (for example the typo `timeouts.nodepools`), an unknown field under
 `timeouts.<kind>`, a scalar or list where a map belongs (such as
-`timeouts.cluster: 5m`), a timeout string that is not a duration (such as `"300"`, with
-no unit), and an empty adapter list. Env vars
+`timeouts.cluster: 5m`), a timeout that is not a duration (such as `"300"` or `300`, with
+no unit), and an empty adapter list. A bare number fails for the shared durations too, such as
+`polling.interval`. Env vars
 for an unknown kind are not checked. `descriptor.NewCatalog` then checks each
 row (`EntityDescriptor.Validate`), so `Load()` also fails on a negative timeout
 or a row with adapters and no reconciled timeout. A row that waits for

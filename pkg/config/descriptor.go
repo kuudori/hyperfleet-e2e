@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/spf13/viper"
 
@@ -30,8 +31,7 @@ func entityKey(kind string) string {
 	return strings.ToLower(kind)
 }
 
-// defaultEntityTimeouts is what CI runs the reconciling kinds with, except the
-// longer NodePool reconciled timeout.
+// defaultEntityTimeouts is what CI runs the reconciling kinds with.
 var defaultEntityTimeouts = descriptor.EntityTimeouts{Reconciled: 2 * time.Minute, Deleted: 2 * time.Minute}
 
 // EntityDescriptors returns a copy of the single descriptor table, with no config applied. Each row holds routing,
@@ -83,8 +83,7 @@ func EntityDescriptors() []descriptor.EntityDescriptor {
 			Kind: "NodePool", Plural: "nodepools", ParentKind: "Cluster", OnParentDelete: "cascade",
 			// The release name hyperfleet-infra gives the nodepool adapter.
 			RequiredAdapters: []string{"np-configmap"},
-			// A nodepool reconciles after its cluster, so it gets longer to reach Reconciled.
-			Timeouts: descriptor.EntityTimeouts{Reconciled: 5 * time.Minute, Deleted: defaultEntityTimeouts.Deleted},
+			Timeouts:         defaultEntityTimeouts,
 			// Calibrated from Prow tier1-nightly baselines (hyperfleet-dev-prow), with
 			// a ~2.25x margin: the lower baselines make the same absolute jitter as
 			// Cluster a higher percentage.
@@ -182,11 +181,11 @@ func loadEntityCatalog() (*descriptor.Catalog, error) {
 			}
 		}
 		for name, field := range fields {
-			// UnmarshalKey decodes like the other durations in Config: a string
-			// needs a unit, so "300" fails instead of becoming 300ns.
+			// UnmarshalKey decodes like the other durations in Config: a value
+			// needs a unit, so "300" or 300 fails instead of becoming 300ns.
 			path := "timeouts." + key + "." + name
 			var timeout time.Duration
-			if err := viper.UnmarshalKey(path, &timeout); err != nil {
+			if err := viper.UnmarshalKey(path, &timeout, rejectBareDurations); err != nil {
 				return nil, fmt.Errorf("%s: %w", path, err)
 			}
 			*field = cmp.Or(timeout, *field)
@@ -210,12 +209,13 @@ func viperMap(path string) (map[string]any, error) {
 }
 
 // viperStringSlice reads a string list. A string (as an env var gives) is split
-// on commas; GetStringSlice alone would split "a, b" on whitespace into "a," and
-// "b". Each name is trimmed and blank names, as a trailing comma leaves, dropped.
+// on commas and whitespace, so "a,b", "a, b" and "a b" all name a and b;
+// GetStringSlice alone splits on whitespace only and would turn "a, b" into "a,"
+// and "b". Each name is trimmed and blank names, as a trailing comma leaves, dropped.
 func viperStringSlice(path string) []string {
 	values := viper.GetStringSlice(path)
 	if raw, ok := viper.Get(path).(string); ok {
-		values = strings.Split(raw, ",")
+		values = strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
 	}
 	var names []string
 	for _, value := range values {
