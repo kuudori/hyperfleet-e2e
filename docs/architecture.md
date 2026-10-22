@@ -50,7 +50,7 @@ api:
   url: https://api.hyperfleet.example.com
 timeouts:
   cluster:
-    reconciled: 5m   # Default: the Cluster row in EntityDescriptors (pkg/config/descriptor.go)
+    reconciled: 5m   # Example override; the default is defaultEntityTimeouts in pkg/config/descriptor.go
 ```
 
 ### pkg/config

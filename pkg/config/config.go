@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
-	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -322,9 +321,6 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("configuration error: %w\nPlease check your config file", err)
 	}
 
-	// WORKAROUND: viper.Unmarshal doesn't always respect env var bindings for nested structs
-	// Use reflection to automatically apply all values from viper to the config struct
-	applyViperValues(reflect.ValueOf(cfg).Elem(), "")
 	entities, err := loadEntityCatalog()
 	if err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
@@ -350,122 +346,21 @@ func IsDryRun() bool {
 	return viper.GetBool(Tests.GinkgoDryRun)
 }
 
-// BindEnvVars binds every config path to its HYPERFLEET_* env var: api.url ->
-// HYPERFLEET_API_URL. viper.Unmarshal only sees env values for bound keys, and
-// binding the per-kind keys lets Load read them without viper.AutomaticEnv.
+// BindEnvVars makes viper read HYPERFLEET_* env vars: api.url -> HYPERFLEET_API_URL.
+// AutomaticEnv covers viper.Get, and ExperimentalBindStruct makes viper.Unmarshal
+// take its keys from the Config fields, so an env var reaches a field that the
+// config file does not set. viper.Reset clears the option, so call this after it.
 func BindEnvVars() {
-	for _, path := range envConfigPaths(entityKeys()) {
-		_ = viper.BindEnv(path, envVarName(path))
-	}
+	viper.SetEnvPrefix(EnvPrefix)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+	viper.SetOptions(viper.ExperimentalBindStruct())
 	// Aliases for adapters.cluster and adapters.nodepool, removed with the per-kind
-	// suites in HYPERFLEET-1734. Bound after HYPERFLEET_ADAPTERS_<KIND>, which wins.
+	// suites in HYPERFLEET-1734. HYPERFLEET_ADAPTERS_<KIND> still wins.
 	_ = viper.BindEnv("adapters.cluster", "API_ADAPTERS_CLUSTER")
 	_ = viper.BindEnv("adapters.nodepool", "API_ADAPTERS_NODEPOOL")
-	// Unprefixed alias for auth_mode. HYPERFLEET_AUTH_MODE, bound first, wins.
+	// Unprefixed alias for auth_mode. HYPERFLEET_AUTH_MODE still wins.
 	_ = viper.BindEnv(Authentication.Mode, "AUTH_MODE")
-}
-
-// envConfigPaths returns every config path BindEnvVars binds to a HYPERFLEET_*
-// env var: each Config field, then adapters.<key> and timeouts.<key>.reconciled
-// and .deleted for each kind key.
-func envConfigPaths(keys []string) []string {
-	paths := structConfigPaths(reflect.TypeFor[Config](), "")
-	for _, key := range keys {
-		paths = append(paths, "adapters."+key, "timeouts."+key+".reconciled", "timeouts."+key+".deleted")
-	}
-	return paths
-}
-
-func structConfigPaths(t reflect.Type, prefix string) []string {
-	var paths []string
-	for field := range t.Fields() {
-		configPath, ok := fieldConfigPath(prefix, field.Tag.Get(TagMapstructure))
-		if !ok {
-			continue
-		}
-		paths = append(paths, configPath)
-		if field.Type.Kind() == reflect.Struct {
-			paths = append(paths, structConfigPaths(field.Type, configPath)...)
-		}
-	}
-	return paths
-}
-
-// envVarName returns the env var bound to a config path: api.url -> HYPERFLEET_API_URL.
-func envVarName(configPath string) string {
-	return EnvVar(strings.ToUpper(strings.ReplaceAll(configPath, ".", "_")))
-}
-
-// applyViperValues recursively applies values from viper to the config struct using reflection
-// This ensures environment variables and flags properly override config file values.
-func applyViperValues(v reflect.Value, prefix string) {
-	for fieldType, field := range v.Fields() {
-		configPath, ok := fieldConfigPath(prefix, fieldType.Tag.Get(TagMapstructure))
-		if !ok {
-			continue
-		}
-
-		if field.Kind() == reflect.Struct && field.Type() != reflect.TypeFor[time.Duration]() {
-			applyViperValues(field, configPath)
-			continue
-		}
-
-		if !field.CanSet() {
-			continue
-		}
-
-		// Apply value from viper based on field type
-		switch field.Kind() {
-		case reflect.String:
-			if viperVal := viper.GetString(configPath); viperVal != "" {
-				field.SetString(viperVal)
-			}
-		case reflect.Bool:
-			// For bool, only apply if the key is explicitly set in viper
-			// This preserves the priority order: flags > env > config > defaults
-			if viper.IsSet(configPath) {
-				field.SetBool(viper.GetBool(configPath))
-			}
-		case reflect.Pointer:
-			// *bool distinguishes "unset" (nil, default applies) from an explicit false
-			if field.Type().Elem().Kind() == reflect.Bool && viper.IsSet(configPath) {
-				field.Set(reflect.ValueOf(new(viper.GetBool(configPath))))
-			}
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			// Special handling for time.Duration (which is int64)
-			if field.Type() == reflect.TypeFor[time.Duration]() {
-				if viperVal := viper.GetDuration(configPath); viperVal != 0 {
-					field.SetInt(int64(viperVal))
-				}
-			} else {
-				if viperVal := viper.GetInt64(configPath); viperVal != 0 {
-					field.SetInt(viperVal)
-				}
-			}
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if viperVal := viper.GetUint64(configPath); viperVal != 0 {
-				field.SetUint(viperVal)
-			}
-		case reflect.Float32, reflect.Float64:
-			if viperVal := viper.GetFloat64(configPath); viperVal != 0 {
-				field.SetFloat(viperVal)
-			}
-		}
-	}
-}
-
-// fieldConfigPath returns the config path of a struct field from its mapstructure
-// tag. A field with no name or "-", such as Entities, has none.
-func fieldConfigPath(prefix, tag string) (string, bool) {
-	name, _, _ := strings.Cut(tag, ",")
-	switch {
-	case name == "" || name == "-":
-		return "", false
-	case prefix == "":
-		return name, true
-	default:
-		return prefix + "." + name, true
-	}
 }
 
 // applyDefaults applies default values for unset fields.

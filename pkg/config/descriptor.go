@@ -132,9 +132,8 @@ func timeoutFields(t *descriptor.EntityTimeouts) map[string]*time.Duration {
 func sharedTimeoutKeys() []string {
 	var keys []string
 	for field := range reflect.TypeFor[TimeoutsConfig]().Fields() {
-		if key, ok := fieldConfigPath("", field.Tag.Get(TagMapstructure)); ok {
-			keys = append(keys, strings.ToLower(key))
-		}
+		key, _, _ := strings.Cut(field.Tag.Get(TagMapstructure), ",")
+		keys = append(keys, strings.ToLower(key))
 	}
 	return keys
 }

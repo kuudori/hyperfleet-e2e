@@ -67,7 +67,7 @@ func entity(t *testing.T, cfg *config.Config, kind string) descriptor.EntityDesc
 	return cfg.Entities.MustGet(kind)
 }
 
-// envVar returns the env var bound to a config path, as config.BindEnvVars names it.
+// envVar returns the HYPERFLEET_* env var viper reads for a config path.
 func envVar(path string) string {
 	return config.EnvVar(strings.ToUpper(strings.ReplaceAll(path, ".", "_")))
 }
@@ -188,6 +188,15 @@ func TestAuthMode(t *testing.T) {
 		{
 			name:         "HYPERFLEET_AUTH_MODE alias is accepted",
 			env:          map[string]string{"HYPERFLEET_AUTH_MODE": config.AuthModeAPI},
+			want:         config.AuthModeAPI,
+			wantScheme:   config.AuthorizationSchemeBearer,
+			wantSA:       config.DefaultE2ERunnerServiceAccountName,
+			wantNS:       "unit-test",
+			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+		},
+		{
+			name:         "HYPERFLEET_AUTH_MODE beats AUTH_MODE",
+			env:          map[string]string{"HYPERFLEET_AUTH_MODE": config.AuthModeAPI, "AUTH_MODE": config.AuthModeEdge},
 			want:         config.AuthModeAPI,
 			wantScheme:   config.AuthorizationSchemeBearer,
 			wantSA:       config.DefaultE2ERunnerServiceAccountName,
