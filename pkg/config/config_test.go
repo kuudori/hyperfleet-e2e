@@ -1,8 +1,10 @@
 package config_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -17,6 +19,16 @@ import (
 func loadConfig(t *testing.T, configFile string, env map[string]string) *config.Config {
 	t.Helper()
 
+	cfg, err := loadConfigResult(t, configFile, env)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	return cfg
+}
+
+func loadConfigResult(t *testing.T, configFile string, env map[string]string) (*config.Config, error) {
+	t.Helper()
+
 	viper.Reset()
 	t.Cleanup(viper.Reset)
 
@@ -24,10 +36,17 @@ func loadConfig(t *testing.T, configFile string, env map[string]string) *config.
 	for _, key := range []string{
 		"HYPERFLEET_CONFIG",
 		"HYPERFLEET_DESIRE_ADAPTER",
+		"HYPERFLEET_AUTHMODE",
+		"HYPERFLEET_AUTH_MODE",
+		"HYPERFLEET_IDENTITY_EXPECTEDIDENTITY",
+		"HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME",
+		"HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE",
+		"AUTH_MODE",
 	} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("HYPERFLEET_API_URL", "http://hyperfleet-api.invalid:8000")
+	t.Setenv("NAMESPACE", "unit-test")
 	t.Setenv("RUN_ID", "unit-test")
 	t.Setenv("BROKER_TYPE", "rabbitmq")
 	for key, value := range env {
@@ -35,13 +54,13 @@ func loadConfig(t *testing.T, configFile string, env map[string]string) *config.
 	}
 
 	if err := common.LoadConfig(configFile); err != nil {
-		t.Fatalf("LoadConfig(%q): %v", configFile, err)
+		return nil, fmt.Errorf("LoadConfig(%q): %w", configFile, err)
 	}
 	cfg, err := config.Load()
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		return nil, err
 	}
-	return cfg
+	return cfg, nil
 }
 
 func writeConfigFile(t *testing.T, content string) string {
@@ -100,5 +119,118 @@ func TestDesireAdapterKey(t *testing.T) {
 				t.Errorf("Desire.Adapter = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAuthMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		configYAML   string
+		env          map[string]string
+		want         string
+		wantScheme   string
+		wantSA       string
+		wantNS       string
+		wantIdentity string
+	}{
+		{
+			name:         "default",
+			want:         config.AuthModeEdgeAPI,
+			wantScheme:   config.AuthorizationSchemeServiceAccount,
+			wantSA:       config.DefaultE2ERunnerServiceAccountName,
+			wantNS:       "unit-test",
+			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+		},
+		{
+			name:         "bare AUTH_MODE overrides default",
+			env:          map[string]string{"AUTH_MODE": config.AuthModeAPI},
+			want:         config.AuthModeAPI,
+			wantScheme:   config.AuthorizationSchemeBearer,
+			wantSA:       config.DefaultE2ERunnerServiceAccountName,
+			wantNS:       "unit-test",
+			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+		},
+		{
+			name:         "bare AUTH_MODE overrides config file",
+			configYAML:   "auth_mode: API\n",
+			env:          map[string]string{"AUTH_MODE": config.AuthModeEdge},
+			want:         config.AuthModeEdge,
+			wantScheme:   config.AuthorizationSchemeServiceAccount,
+			wantSA:       config.DefaultE2ERunnerServiceAccountName,
+			wantNS:       "unit-test",
+			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+		},
+		{
+			name:       "config file sets mode",
+			configYAML: "auth_mode: NONE\n",
+			want:       config.AuthModeNone,
+			wantScheme: config.AuthorizationSchemeBearer,
+		},
+		{
+			name:         "HYPERFLEET_AUTH_MODE alias is accepted",
+			env:          map[string]string{"HYPERFLEET_AUTH_MODE": config.AuthModeAPI},
+			want:         config.AuthModeAPI,
+			wantScheme:   config.AuthorizationSchemeBearer,
+			wantSA:       config.DefaultE2ERunnerServiceAccountName,
+			wantNS:       "unit-test",
+			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configFile := ""
+			if tt.configYAML != "" {
+				configFile = writeConfigFile(t, tt.configYAML)
+			}
+			cfg := loadConfig(t, configFile, tt.env)
+			if cfg.AuthMode != tt.want {
+				t.Errorf("AuthMode = %q, want %q", cfg.AuthMode, tt.want)
+			}
+			if got := cfg.MachineAuthorizationScheme(); got != tt.wantScheme {
+				t.Errorf("MachineAuthorizationScheme() = %q, want %q", got, tt.wantScheme)
+			}
+			if got := cfg.Identity.TokenRequest.ServiceAccountName; got != tt.wantSA {
+				t.Errorf("TokenRequest.ServiceAccountName = %q, want %q", got, tt.wantSA)
+			}
+			if got := cfg.Identity.TokenRequest.Namespace; got != tt.wantNS {
+				t.Errorf("TokenRequest.Namespace = %q, want %q", got, tt.wantNS)
+			}
+			if got := cfg.Identity.ExpectedIdentity; got != tt.wantIdentity {
+				t.Errorf("Identity.ExpectedIdentity = %q, want %q", got, tt.wantIdentity)
+			}
+		})
+	}
+}
+
+func TestAuthModeRejectsUnsupportedValue(t *testing.T) {
+	_, err := loadConfigResult(t, "", map[string]string{"AUTH_MODE": "INVALID"})
+	if err == nil {
+		t.Fatal("Load accepted unsupported AUTH_MODE")
+	}
+	if !strings.Contains(err.Error(), "auth_mode must be one of") {
+		t.Errorf("Load error = %q, want unsupported AUTH_MODE validation error", err)
+	}
+}
+
+func TestAuthenticatedModeRequiresNamespace(t *testing.T) {
+	_, err := loadConfigResult(t, "", map[string]string{"NAMESPACE": ""})
+	if err == nil {
+		t.Fatal("Load accepted authenticated mode without NAMESPACE")
+	}
+	if !strings.Contains(err.Error(), "NAMESPACE is required when AUTH_MODE=EDGE+API") {
+		t.Errorf("Load error = %q, want missing NAMESPACE validation error", err)
+	}
+}
+
+func TestAuthModeRejectsCustomRunnerServiceAccount(t *testing.T) {
+	_, err := loadConfigResult(t, "", map[string]string{
+		"HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME": "other-runner",
+	})
+	if err == nil {
+		t.Fatal("Load accepted a nonstandard E2E runner ServiceAccount")
+	}
+	if !strings.Contains(err.Error(), "serviceAccountName is fixed") {
+		t.Errorf("Load error = %q, want fixed runner ServiceAccount validation error", err)
 	}
 }

@@ -346,20 +346,44 @@ func TestAdapterHelmSetArgs(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		tokenRequestSA string // ServiceAccountName - non-empty enables JWT
+		authMode       string
+		tokenRequestSA string // ServiceAccountName - non-empty enables legacy JWT auth
 		runID          string
 		setValues      map[string]string
 		wantContains   []string // substrings that must appear in joined args
 		wantAbsent     []string // substrings that must NOT appear
 	}{
 		{
-			name:           "includes auth flag when JWT is enabled",
-			tokenRequestSA: "hyperfleet-e2e-sa",
-			wantContains:   []string{"adapterConfig.hyperfleetApi.auth.enabled=true"},
+			name:         "EDGE+API enables ServiceAccount auth",
+			authMode:     config.AuthModeEdgeAPI,
+			wantContains: []string{"adapterConfig.hyperfleetApi.auth.enabled=true", "adapterConfig.hyperfleetApi.auth.scheme=ServiceAccount"},
 		},
 		{
-			name:       "omits auth flag when JWT is disabled",
-			wantAbsent: []string{"adapterConfig.hyperfleetApi.auth.enabled"},
+			name:         "EDGE enables ServiceAccount auth",
+			authMode:     config.AuthModeEdge,
+			wantContains: []string{"adapterConfig.hyperfleetApi.auth.enabled=true", "adapterConfig.hyperfleetApi.auth.scheme=ServiceAccount"},
+		},
+		{
+			name:         "API enables auth and leaves chart scheme default",
+			authMode:     config.AuthModeAPI,
+			wantContains: []string{"adapterConfig.hyperfleetApi.auth.enabled=true"},
+			wantAbsent:   []string{"adapterConfig.hyperfleetApi.auth.scheme="},
+		},
+		{
+			name:           "NONE disables auth even when TokenRequest is configured",
+			authMode:       config.AuthModeNone,
+			tokenRequestSA: "hyperfleet-e2e-runner",
+			wantAbsent:     []string{"adapterConfig.hyperfleetApi.auth.enabled", "adapterConfig.hyperfleetApi.auth.scheme="},
+		},
+		{
+			name:           "unset mode preserves TokenRequest auth and chart scheme default",
+			tokenRequestSA: "hyperfleet-e2e-runner",
+			wantContains:   []string{"adapterConfig.hyperfleetApi.auth.enabled=true"},
+			wantAbsent:     []string{"adapterConfig.hyperfleetApi.auth.scheme="},
+		},
+		{
+			name:       "unset mode without TokenRequest omits auth settings",
+			wantAbsent: []string{"adapterConfig.hyperfleetApi.auth.enabled", "adapterConfig.hyperfleetApi.auth.scheme="},
 		},
 		{
 			name:         "includes fullnameOverride",
@@ -385,7 +409,7 @@ func TestAdapterHelmSetArgs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := &config.Config{RunID: tt.runID}
+			cfg := &config.Config{RunID: tt.runID, AuthMode: tt.authMode}
 			cfg.Identity.TokenRequest.ServiceAccountName = tt.tokenRequestSA
 
 			h := &Helper{Cfg: cfg}

@@ -7,6 +7,7 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
 )
@@ -18,9 +19,12 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 
 		ginkgo.BeforeEach(func(_ context.Context) {
 			h = helper.New()
+			if h.Cfg.AuthMode == config.AuthModeNone {
+				ginkgo.Skip("JWT enforcement tests require an authenticated AUTH_MODE")
+			}
 		})
 
-		ginkgo.It("rejects GET request without Authorization header with 401 and AUT-001",
+		ginkgo.It("rejects GET request without Authorization header with 401",
 			func(ctx context.Context) {
 				ginkgo.By("sending GET without Authorization header")
 				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, "")
@@ -29,10 +33,12 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 
 				Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized),
 					"unauthenticated GET should return 401")
-				Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-001"))
+				if h.Cfg.AuthMode == config.AuthModeAPI {
+					Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-001"))
+				}
 			})
 
-		ginkgo.It("rejects POST request without Authorization header with 401 and AUT-001",
+		ginkgo.It("rejects POST request without Authorization header with 401",
 			func(ctx context.Context) {
 				ginkgo.By("sending POST without Authorization header")
 				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodPost, "")
@@ -41,57 +47,65 @@ var _ = ginkgo.Describe("[Suite: auth][enforcement] JWT Authentication Enforceme
 
 				Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized),
 					"unauthenticated POST should return 401")
-				Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-001"))
+				if h.Cfg.AuthMode == config.AuthModeAPI {
+					Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-001"))
+				}
 			})
 
-		ginkgo.It("rejects requests with invalid JWT signature with 401 and AUT-002",
+		ginkgo.It("rejects requests with invalid JWT signature with 401",
 			func(ctx context.Context) {
 				ginkgo.By("crafting a JWT signed with an unknown key")
 				token, err := craftInvalidSignatureJWT()
 				Expect(err).NotTo(HaveOccurred(), "crafting JWT should succeed")
 
-				ginkgo.By("sending GET with invalid-signature bearer token")
-				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, token)
+				ginkgo.By("sending GET with invalid-signature token")
+				resp, err := rawRequestWithScheme(ctx, h.Cfg.API.URL, http.MethodGet, token, h.Cfg.MachineAuthorizationScheme())
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
 				Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized),
 					"invalid signature should return 401")
-				Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-002"))
+				if h.Cfg.AuthMode == config.AuthModeAPI {
+					Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-002"))
+				}
 			})
 
 		// Note: the error model defines AUT-003 for expired tokens, but the API's JWT middleware
 		// currently returns AUT-002 (invalid credentials) for all unverifiable tokens.
-		// This test validates the deployed behavior.
+		// This test validates the deployed behavior in API mode.
 		ginkgo.It("rejects requests with expired token with 401",
 			func(ctx context.Context) {
 				ginkgo.By("crafting a self-signed expired JWT")
 				token, err := craftExpiredJWT()
 				Expect(err).NotTo(HaveOccurred(), "crafting expired JWT should succeed")
 
-				ginkgo.By("sending GET with expired bearer token")
-				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, token)
+				ginkgo.By("sending GET with expired token")
+				resp, err := rawRequestWithScheme(ctx, h.Cfg.API.URL, http.MethodGet, token, h.Cfg.MachineAuthorizationScheme())
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
 				Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized),
 					"expired token should return 401")
-				Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-002"))
+				if h.Cfg.AuthMode == config.AuthModeAPI {
+					Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-002"))
+				}
 			})
 
 		// Note: the error model defines AUT-004 for malformed tokens, but the API's JWT middleware
 		// currently returns AUT-002 (invalid credentials) for all unverifiable tokens.
-		// This test validates the deployed behavior.
+		// This test validates the deployed behavior in API mode.
 		ginkgo.It("rejects requests with malformed token with 401",
 			func(ctx context.Context) {
-				ginkgo.By("sending GET with a non-JWT string as bearer token")
-				resp, err := rawRequest(ctx, h.Cfg.API.URL, http.MethodGet, "not-a-jwt")
+				ginkgo.By("sending GET with a non-JWT token")
+				resp, err := rawRequestWithScheme(ctx, h.Cfg.API.URL, http.MethodGet, "not-a-jwt", h.Cfg.MachineAuthorizationScheme())
 				Expect(err).NotTo(HaveOccurred(), "HTTP request should succeed at transport level")
 				defer func() { _ = resp.Body.Close() }()
 
 				Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized),
 					"malformed token should return 401")
-				Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-002"))
+				if h.Cfg.AuthMode == config.AuthModeAPI {
+					Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-002"))
+				}
 			})
 	},
 )

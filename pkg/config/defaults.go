@@ -2,6 +2,12 @@ package config
 
 import "time"
 
+// DefaultAuthMode enables gateway and API validation by default.
+const DefaultAuthMode = AuthModeEdgeAPI
+
+// DefaultE2ERunnerServiceAccountName is the fixed machine identity for E2E requests.
+const DefaultE2ERunnerServiceAccountName = "hyperfleet-e2e-runner"
+
 // Log level constants
 const (
 	// LogLevelDebug enables detailed test steps and all framework internal logs

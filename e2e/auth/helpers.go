@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 )
 
 const apiPrefix = "/api/hyperfleet/v1/"
@@ -17,6 +18,11 @@ const apiPrefix = "/api/hyperfleet/v1/"
 // rawRequest makes an HTTP request to the clusters API endpoint.
 // If token is non-empty, it's sent as a Bearer token; otherwise unauthenticated.
 func rawRequest(ctx context.Context, apiURL, method, token string) (*http.Response, error) {
+	return rawRequestWithScheme(ctx, apiURL, method, token, config.AuthorizationSchemeBearer)
+}
+
+// rawRequestWithScheme makes an HTTP request with an explicit token scheme.
+func rawRequestWithScheme(ctx context.Context, apiURL, method, token, scheme string) (*http.Response, error) {
 	fullURL := strings.TrimRight(apiURL, "/") + apiPrefix + "clusters"
 	req, err := http.NewRequestWithContext(ctx, method, fullURL, nil)
 	if err != nil {
@@ -24,7 +30,7 @@ func rawRequest(ctx context.Context, apiURL, method, token string) (*http.Respon
 	}
 	req.Header.Set("Accept", "application/json")
 	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Authorization", scheme+" "+token)
 	}
 	return (&http.Client{Timeout: 30 * time.Second}).Do(req)
 }

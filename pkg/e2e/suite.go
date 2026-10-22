@@ -36,7 +36,7 @@ var _ = ginkgo.SynchronizedBeforeSuite(
 			log.Fatalf("Suite config not initialized")
 		}
 
-		if !cfg.Identity.TokenRequest.IsEnabled() {
+		if config.IsDryRun() || cfg.AuthMode == config.AuthModeNone || !cfg.Identity.TokenRequest.IsEnabled() {
 			return nil
 		}
 

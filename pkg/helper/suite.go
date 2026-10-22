@@ -68,7 +68,7 @@ func New() *Helper {
 
 	var opts []client.ClientOption
 	if token := cfg.Identity.Token(); token != "" {
-		opts = append(opts, client.WithBearerToken(token))
+		opts = append(opts, client.WithAuthorizationToken(token, cfg.MachineAuthorizationScheme()))
 	}
 
 	cl, err := client.NewHyperFleetClient(cfg.API.URL, nil, opts...)

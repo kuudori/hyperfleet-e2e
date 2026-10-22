@@ -17,6 +17,23 @@ const (
 	// TagMapstructure is the struct tag used by Viper for configuration mapping
 	TagMapstructure = "mapstructure"
 
+	// AuthModeConfigKey is the configuration key for AUTH_MODE.
+	AuthModeConfigKey = "auth_mode"
+
+	// AuthModeNone disables gateway and API authentication.
+	AuthModeNone = "NONE"
+	// AuthModeAPI makes the API validate credentials directly.
+	AuthModeAPI = "API"
+	// AuthModeEdge makes the gateway validate credentials.
+	AuthModeEdge = "EDGE"
+	// AuthModeEdgeAPI makes the gateway validate credentials and the API validate its wristband.
+	AuthModeEdgeAPI = "EDGE+API"
+
+	// AuthorizationSchemeBearer selects direct API JWT or human OIDC validation.
+	AuthorizationSchemeBearer = "Bearer"
+	// AuthorizationSchemeServiceAccount selects gateway Kubernetes TokenReview.
+	AuthorizationSchemeServiceAccount = "ServiceAccount"
+
 	// EnvPrefix is the prefix for all environment variables (without trailing underscore)
 	// Viper automatically adds underscore when using SetEnvPrefix()
 	EnvPrefix = "HYPERFLEET"
@@ -44,6 +61,15 @@ var API = struct {
 	URL string
 }{
 	URL: "api.url",
+}
+
+// Authentication config keys
+var Authentication = struct {
+	// Mode controls where API authentication is enforced.
+	// Env: AUTH_MODE
+	Mode string
+}{
+	Mode: AuthModeConfigKey,
 }
 
 // Tests config keys for Ginkgo test execution
@@ -92,10 +118,6 @@ var Identity = struct {
 	// Env: HYPERFLEET_IDENTITY_EXPECTEDIDENTITY
 	ExpectedIdentity string
 
-	// TokenRequestServiceAccountName is the K8s service account for TokenRequest
-	// Env: HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME
-	TokenRequestServiceAccountName string
-
 	// TokenRequestNamespace is the namespace of the service account
 	// Env: HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE
 	TokenRequestNamespace string
@@ -108,11 +130,10 @@ var Identity = struct {
 	// Env: HYPERFLEET_IDENTITY_TOKENREQUEST_EXPIRATIONSECONDS
 	TokenRequestExpirationSeconds string
 }{
-	ExpectedIdentity:               "identity.expectedIdentity",
-	TokenRequestServiceAccountName: "identity.tokenRequest.serviceAccountName",
-	TokenRequestNamespace:          "identity.tokenRequest.namespace",
-	TokenRequestAudience:           "identity.tokenRequest.audience",
-	TokenRequestExpirationSeconds:  "identity.tokenRequest.expirationSeconds",
+	ExpectedIdentity:              "identity.expectedIdentity",
+	TokenRequestNamespace:         "identity.tokenRequest.namespace",
+	TokenRequestAudience:          "identity.tokenRequest.audience",
+	TokenRequestExpirationSeconds: "identity.tokenRequest.expirationSeconds",
 }
 
 // Log config keys
@@ -169,9 +190,9 @@ type APIDeploymentConfig struct {
 
 // TokenRequestConfig contains configuration for K8s TokenRequest-based JWT acquisition.
 // When enabled (ServiceAccountName is set), a JWT is acquired via the K8s TokenRequest API
-// at helper creation time and used for API authentication.
+// at suite startup and used for API authentication.
 type TokenRequestConfig struct {
-	ServiceAccountName string `yaml:"serviceAccountName" mapstructure:"serviceAccountName"`
+	ServiceAccountName string `yaml:"serviceAccountName" mapstructure:"serviceAccountName"` // Fixed to the E2E runner identity for authenticated modes.
 	Namespace          string `yaml:"namespace" mapstructure:"namespace"`
 	Audience           string `yaml:"audience" mapstructure:"audience"`
 	ExpirationSeconds  int64  `yaml:"expirationSeconds" mapstructure:"expirationSeconds"`
@@ -183,10 +204,10 @@ func (t TokenRequestConfig) IsEnabled() bool {
 }
 
 // IdentityConfig contains JWT authentication and audit identity configuration.
-// token is acquired via TokenRequest at runtime and injected as Authorization: Bearer.
+// token is acquired via TokenRequest at runtime and sent with the mode-appropriate scheme.
 // ExpectedIdentity is used by test assertions to verify audit fields (created_by, deleted_by).
 type IdentityConfig struct {
-	token            string             // JWT bearer token (acquired via TokenRequest, not user-configurable)
+	token            string             // JWT machine token (acquired via TokenRequest, not user-configurable)
 	ExpectedIdentity string             `yaml:"expectedIdentity" mapstructure:"expectedIdentity"` // Expected audit identity for assertions
 	TokenRequest     TokenRequestConfig `yaml:"tokenRequest" mapstructure:"tokenRequest"`         // K8s TokenRequest JWT acquisition
 }
@@ -220,6 +241,7 @@ type Config struct {
 	OutputDir         string                  `yaml:"outputDir" mapstructure:"outputDir"`
 	TestDataDir       string                  `yaml:"testDataDir" mapstructure:"testDataDir"`
 	RunID             string                  `yaml:"runId" mapstructure:"runId"`
+	AuthMode          string                  `yaml:"auth_mode" mapstructure:"auth_mode"`
 	API               APIConfig               `yaml:"api" mapstructure:"api"`
 	Timeouts          TimeoutsConfig          `yaml:"timeouts" mapstructure:"timeouts"`
 	Polling           PollingConfig           `yaml:"polling" mapstructure:"polling"`
@@ -230,6 +252,24 @@ type Config struct {
 	BrokerType        string                  `yaml:"brokerType" mapstructure:"brokerType"`
 	Identity          IdentityConfig          `yaml:"identity" mapstructure:"identity"`
 	Desire            DesireConfig            `yaml:"desire" mapstructure:"desire"`
+}
+
+// MachineAuthorizationScheme returns the Authorization scheme for Kubernetes ServiceAccount tokens.
+func (c *Config) MachineAuthorizationScheme() string {
+	if c.AuthMode == AuthModeEdge || c.AuthMode == AuthModeEdgeAPI {
+		return AuthorizationSchemeServiceAccount
+	}
+	return AuthorizationSchemeBearer
+}
+
+// AdapterAuthEnabled reports whether adapters should use projected API tokens.
+// An unset mode preserves the legacy TokenRequest-driven behavior for callers
+// that construct Config directly rather than loading it through config.Load.
+func (c *Config) AdapterAuthEnabled() bool {
+	if c.AuthMode == "" {
+		return c.Identity.TokenRequest.IsEnabled()
+	}
+	return c.AuthMode != AuthModeNone
 }
 
 // APIConfig contains API-related configuration
@@ -300,6 +340,11 @@ func Load() (*Config, error) {
 	// to ensure structured logging is properly configured
 
 	return cfg, nil
+}
+
+// IsDryRun reports whether the CLI is listing tests without executing them.
+func IsDryRun() bool {
+	return viper.GetBool(Tests.GinkgoDryRun)
 }
 
 // applyViperValues recursively applies values from viper to the config struct using reflection
@@ -391,6 +436,10 @@ func applyViperValues(v reflect.Value, prefix string) {
 
 // applyDefaults applies default values for unset fields
 func (c *Config) applyDefaults() {
+	if c.AuthMode == "" {
+		c.AuthMode = DefaultAuthMode
+	}
+
 	// Apply timeout defaults
 	if c.Timeouts.Cluster.Reconciled == 0 {
 		c.Timeouts.Cluster.Reconciled = DefaultClusterReconciledTimeout
@@ -530,20 +579,40 @@ func (c *Config) applyDefaults() {
 		c.APIDeployment.ChartPath = os.Getenv("API_CHART_PATH")
 	}
 
-	// Apply tokenRequest defaults when enabled
+	// Authenticated E2E runs use the fixed, infra-owned machine identity by default.
+	if c.AuthMode != AuthModeNone && !IsDryRun() && !c.Identity.TokenRequest.IsEnabled() {
+		c.Identity.TokenRequest.ServiceAccountName = DefaultE2ERunnerServiceAccountName
+	}
+
+	// TokenRequest namespace defaults to the namespace where HyperFleet is installed.
 	if c.Identity.TokenRequest.IsEnabled() {
+		if c.Identity.TokenRequest.Namespace == "" {
+			c.Identity.TokenRequest.Namespace = c.Namespace
+		}
 		if c.Identity.TokenRequest.ExpirationSeconds == 0 {
 			c.Identity.TokenRequest.ExpirationSeconds = DefaultTokenRequestExpirationSeconds
 		}
 		if c.Identity.TokenRequest.Audience == "" {
 			c.Identity.TokenRequest.Audience = DefaultTokenRequestAudience
 		}
+		if c.Identity.ExpectedIdentity == "" && c.Identity.TokenRequest.Namespace != "" {
+			c.Identity.ExpectedIdentity = fmt.Sprintf(
+				"system:serviceaccount:%s:%s",
+				c.Identity.TokenRequest.Namespace,
+				c.Identity.TokenRequest.ServiceAccountName,
+			)
+		}
 	}
 }
 
 // Validate validates configuration with detailed error messages
 func (c *Config) Validate() error {
-	dryRun := viper.GetBool(Tests.GinkgoDryRun)
+	dryRun := IsDryRun()
+	switch c.AuthMode {
+	case AuthModeNone, AuthModeAPI, AuthModeEdge, AuthModeEdgeAPI:
+	default:
+		return fmt.Errorf("configuration validation failed: auth_mode must be one of: NONE, API, EDGE, or EDGE+API. Got: %s", c.AuthMode)
+	}
 
 	// Validate API URL requirement (not needed for dry-run listing)
 	if !dryRun && c.API.URL == "" {
@@ -591,22 +660,38 @@ func (c *Config) Validate() error {
 
 	// Validate identity tokenRequest config
 	if c.Identity.TokenRequest.IsEnabled() {
-		if c.Identity.TokenRequest.Namespace == "" {
+		if !dryRun && c.AuthMode != AuthModeNone && c.Namespace == "" {
+			return fmt.Errorf("configuration validation failed: NAMESPACE is required when AUTH_MODE=%s", c.AuthMode)
+		}
+		if c.Identity.TokenRequest.Namespace == "" && !dryRun {
 			return fmt.Errorf("configuration validation failed: identity.tokenRequest.namespace is required when tokenRequest is enabled")
+		}
+		if !dryRun && c.AuthMode != AuthModeNone {
+			if c.Identity.TokenRequest.Namespace != c.Namespace {
+				return fmt.Errorf("configuration validation failed: identity.tokenRequest.namespace must match namespace for AUTH_MODE=%s", c.AuthMode)
+			}
+			if c.Identity.TokenRequest.ServiceAccountName != DefaultE2ERunnerServiceAccountName {
+				return fmt.Errorf("configuration validation failed: identity.tokenRequest.serviceAccountName is fixed to %q for E2E machine authentication", DefaultE2ERunnerServiceAccountName)
+			}
 		}
 
 		// Reject token lifetimes shorter than the suite timeout (CWE-613).
 		// The token is acquired once before the suite; a shorter lifetime
 		// causes deterministic 401 failures later.
-		suiteTimeout := 2 * time.Hour
-		if t := viper.GetDuration(Tests.SuiteTimeout); t > 0 {
-			suiteTimeout = t
+		if !dryRun {
+			suiteTimeout := 2 * time.Hour
+			if t := viper.GetDuration(Tests.SuiteTimeout); t > 0 {
+				suiteTimeout = t
+			}
+			tokenLifetime := time.Duration(c.Identity.TokenRequest.ExpirationSeconds) * time.Second
+			if tokenLifetime > 0 && tokenLifetime < suiteTimeout {
+				return fmt.Errorf("configuration validation failed: identity.tokenRequest.expirationSeconds (%ds = %s) is shorter than the suite timeout (%s) - the JWT will expire mid-run causing 401 failures. Increase expirationSeconds or reduce SUITE_TIMEOUT",
+					c.Identity.TokenRequest.ExpirationSeconds, tokenLifetime, suiteTimeout)
+			}
 		}
-		tokenLifetime := time.Duration(c.Identity.TokenRequest.ExpirationSeconds) * time.Second
-		if tokenLifetime > 0 && tokenLifetime < suiteTimeout {
-			return fmt.Errorf("configuration validation failed: identity.tokenRequest.expirationSeconds (%ds = %s) is shorter than the suite timeout (%s) - the JWT will expire mid-run causing 401 failures. Increase expirationSeconds or reduce SUITE_TIMEOUT",
-				c.Identity.TokenRequest.ExpirationSeconds, tokenLifetime, suiteTimeout)
-		}
+	}
+	if !dryRun && c.AuthMode != AuthModeNone && !c.Identity.TokenRequest.IsEnabled() {
+		return fmt.Errorf("configuration validation failed: identity.tokenRequest.serviceAccountName is required when AUTH_MODE=%s because E2E clients use machine ServiceAccount tokens", c.AuthMode)
 	}
 
 	return nil
@@ -616,6 +701,7 @@ func (c *Config) Validate() error {
 func (c *Config) Display() {
 	slog.Info("Loaded configuration",
 		"api_url", redactURL(c.API.URL),
+		"auth_mode", c.AuthMode,
 		"namespace", c.Namespace,
 		"gcp_project_id", c.GCPProjectID,
 		"output_dir", c.OutputDir,

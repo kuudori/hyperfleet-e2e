@@ -45,6 +45,7 @@ func LoadConfig(configFlagValue string) error {
 	// These allow alternative env var names for specific config paths
 	_ = viper.BindEnv("adapters.cluster", "API_ADAPTERS_CLUSTER")
 	_ = viper.BindEnv("adapters.nodepool", "API_ADAPTERS_NODEPOOL")
+	_ = viper.BindEnv(config.Authentication.Mode, "AUTH_MODE", "HYPERFLEET_AUTH_MODE")
 
 	return nil
 }

@@ -37,17 +37,11 @@ export HYPERFLEET_API_URL=<your-hyperfleet-api-url>
 export NAMESPACE=<your-deployment-namespace>
 ```
 
-**Step 2**: Configure JWT authentication (optional)
+**Step 2**: Configure authentication
 
-When the API has JWT enforcement enabled (`server.jwt.enabled=true`), the E2E framework must authenticate requests. It acquires a JWT from K8s using the TokenRequest API — the test runner needs cluster credentials with `serviceaccounts/token` create permission.
-
-```bash
-export HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME=hyperfleet-e2e-sa
-export HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE=hyperfleet
-export HYPERFLEET_IDENTITY_EXPECTEDIDENTITY=system:serviceaccount:hyperfleet:hyperfleet-e2e-sa
-```
-
-Skip this step if JWT is not enabled — the framework works without authentication.
+Set the authentication mode to match the deployed infrastructure. See the
+[authentication mode setup](setup.md#authentication-mode) for supported modes,
+defaults, and token requirements.
 
 **Step 3**: Run tier0 tests
 

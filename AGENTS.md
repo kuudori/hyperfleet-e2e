@@ -92,7 +92,6 @@ if expected := h.ExpectedIdentity(); expected != "" {
 - Adapter names come from config at runtime: `h.Cfg.Adapters.Cluster` and `h.Cfg.Adapters.NodePool`. Never hardcode them. `configs/config.yaml` (for example `cl-namespace`) overrides the compiled defaults in `pkg/config/defaults.go` (for example `clusters-namespace`).
 - Config priority: CLI flags > `HYPERFLEET_*` env vars > `configs/config.yaml` > `pkg/config/defaults.go`. Config file path: `--config` > `HYPERFLEET_CONFIG` > `./configs/config.yaml`.
 - `helper.New()` calls `log.Fatalf` when the suite config is nil; call `helper.SetSuiteConfig` first. `Config.Validate()` returns an error rather than panicking. Outside `--dry-run` it requires `API.URL` and a `RunID` that is a valid K8s label value (`RUN_ID`), and it always checks `brokerType`.
-- The API runs with JWT enabled by default. Set `identity.tokenRequest.serviceAccountName` and `.namespace`. The framework then gets a token from the K8s TokenRequest API at startup and sends it as `Authorization: Bearer` on every request.
 - Logging uses `log/slog` directly. There is no custom logger wrapper.
 
 ## Boundaries

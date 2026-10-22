@@ -144,6 +144,8 @@ The E2E framework uses Go's `slog` with a custom `GinkgoLogHandler` that automat
 | `--log-format` | `HYPERFLEET_LOG_FORMAT` | `text` | `text`, `json` |
 | `--log-output` | `HYPERFLEET_LOG_OUTPUT` | `stdout` | `stdout`, `stderr` |
 
+Authentication mode controls where requests are authenticated. See the [setup guide](setup.md#authentication-mode) for configuration and behavior.
+
 JSON is the team-standard format for production components. For local debugging, `text` format is more readable.
 
 ### Enabling Debug Output

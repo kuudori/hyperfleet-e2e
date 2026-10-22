@@ -7,6 +7,7 @@ This guide covers setting up a HyperFleet environment for running E2E tests loca
 - [Deployment Options](#deployment-options)
   - [Option 1: Kind (Local)](#option-1-kind-local)
   - [Option 2: GCP](#option-2-gcp)
+- [Authentication mode](#authentication-mode)
 - [Configure Test Settings](#configure-test-settings)
 - [Troubleshooting](#troubleshooting)
 
@@ -27,6 +28,32 @@ Choose one of the following deployment options based on your needs:
 Both options deploy the desire delivery stack next to the adapters: Redis (the desire store), the applier, and the remote adapter `cl-desire`. The `remote-transport` suites need it ([test cases](../test-design/testcases/adapter-with-remote-transport.md)). See [Desire delivery](https://github.com/openshift-hyperfleet/hyperfleet-infra/blob/main/README.md#desire-delivery) in the hyperfleet-infra README.
 
 The tests reach the API through the gateway, `svc/hyperfleet-gateway`, which listens on plain HTTP on port 8000. `svc/hyperfleet-api` is ClusterIP-only and serves TLS to the gateway, so do not point the tests at it.
+
+## Authentication mode
+
+The E2E runner defaults to `AUTH_MODE=EDGE+API`. Set `AUTH_MODE` to the same
+value used to deploy HyperFleet. Supported values are `NONE`, `API`, `EDGE`, and
+`EDGE+API`.
+
+For authenticated modes, E2E acquires a projected token for
+`hyperfleet-e2e-runner` using Kubernetes TokenRequest. The e2e Helmfile
+environment creates this ServiceAccount before tests start. The runner needs
+permission to create TokenRequests; the multi-issuer test also creates a
+temporary alternate ServiceAccount.
+The token namespace defaults to `NAMESPACE`, and the audit identity is derived
+automatically.
+
+| Mode | Machine token sent by E2E | Machine token sent by test adapters |
+| ---- | ------------------------- | ---------------------------------- |
+| `NONE` | No token | Chart default; auth is disabled |
+| `API` | `Bearer <token>` | Chart default `Bearer` |
+| `EDGE` | `ServiceAccount <token>` | `ServiceAccount <token>` |
+| `EDGE+API` | `ServiceAccount <token>` | `ServiceAccount <token>` |
+
+The schemes select different Authorino authentication methods. `ServiceAccount`
+triggers Kubernetes TokenReview; `Bearer` triggers human OIDC JWT validation.
+This prevents a machine token from entering the human-token path. See the
+[infra authentication explanation](https://github.com/openshift-hyperfleet/hyperfleet-infra/blob/main/README.md#L306-L308).
 
 ### Option 1: Kind (Local)
 
@@ -91,7 +118,7 @@ In `e2e-gcp`, `svc/hyperfleet-gateway` is a LoadBalancer.
 kubectl get svc hyperfleet-gateway -n ${NAMESPACE} -w
 ```
 
-With `AUTH_MODE=EDGE` or `EDGE+API`, the gateway denies requests whose host it does not know. If requests through the LoadBalancer are denied, add its address to `AUTHORINO_HOSTS` when you deploy (see the hyperfleet-infra README).
+With `AUTH_MODE=EDGE` or `EDGE+API`, Authorino denies requests whose host it does not know. For a dynamically assigned LoadBalancer IP, re-apply the gateway with `AUTHORINO_HOSTS` set to that IP before running tests. CI setup performs this second apply automatically.
 
 **3. Configure environment variables:**
 

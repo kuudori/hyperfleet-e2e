@@ -290,12 +290,12 @@ The framework uses hand-written Go types (`Resource`, `AdapterStatus`, `Resource
 - **Types**: Defined in `pkg/client/resource.go` - `Resource`, `ResourceCondition`, `AdapterStatus`, etc.
 - **Generic CRUD**: `CreateResource`, `GetResource`, `ListResources`, `PatchResource`, `DeleteResource`
 - **Entity convenience methods**: `GetCluster`, `CreateNodePool`, etc. delegate to generic CRUD with entity-specific paths
-- **Auth**: `WithBearerToken` option wraps `http.RoundTripper` to inject JWT on all requests
+- **Auth**: `WithAuthorizationToken` wraps `http.RoundTripper` and injects a mode-specific scheme on API-host requests; `WithBearerToken` remains a compatibility wrapper.
 
 **Example**:
 ```go
-// Create client with JWT auth
-cl, err := client.NewHyperFleetClient(apiURL, nil, client.WithBearerToken(token))
+// Create client with the scheme selected by AUTH_MODE.
+cl, err := client.NewHyperFleetClient(apiURL, nil, client.WithAuthorizationToken(token, cfg.MachineAuthorizationScheme()))
 if err != nil {
     log.Fatalf("create client: %v", err)
 }

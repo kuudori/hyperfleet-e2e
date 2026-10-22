@@ -5,11 +5,15 @@
 #
 # Configuration Priority (highest to lowest):
 #   1. Command-line flags
-#   2. Environment variables (HYPERFLEET_* prefix)
+#   2. Environment variables (HYPERFLEET_* prefix; AUTH_MODE is unprefixed)
 #   3. This config file
 #   4. Built-in defaults
 #
 # See docs/config.md for full documentation
+
+# Authentication placement. AUTH_MODE and HYPERFLEET_AUTH_MODE override this value.
+# Values: NONE, API, EDGE, EDGE+API.
+auth_mode: EDGE+API
 
 # ============================================================================
 # API Configuration
@@ -139,6 +143,7 @@ identity:
   # For K8s SA tokens with identity_claim=sub, format is "system:serviceaccount:<ns>:<sa>".
   # The API resolves caller identity from the JWT claim — this field tells
   # the E2E framework what value to expect in created_by / deleted_by fields.
+  # If empty, the framework derives the runner ServiceAccount identity automatically.
   # Can be overridden by: HYPERFLEET_IDENTITY_EXPECTEDIDENTITY
   expectedIdentity: ""
 
@@ -147,11 +152,12 @@ identity:
   # a JWT from the K8s cluster at startup using the TokenRequest API.
   # This is the recommended auth method for JWT-enabled API deployments.
   #
-  # Required: serviceAccountName and namespace
-  # The SA must exist in the target namespace before tests run.
+  # Authenticated modes default to ServiceAccount hyperfleet-e2e-runner.
+  # Namespace defaults to the E2E namespace (NAMESPACE).
+  # The e2e Helmfile environment creates the runner ServiceAccount.
+  # The runner credentials need permission to create TokenRequests for it.
   #
   # Can be overridden by environment variables:
-  #   HYPERFLEET_IDENTITY_TOKENREQUEST_SERVICEACCOUNTNAME
   #   HYPERFLEET_IDENTITY_TOKENREQUEST_NAMESPACE
   #   HYPERFLEET_IDENTITY_TOKENREQUEST_AUDIENCE
   #   HYPERFLEET_IDENTITY_TOKENREQUEST_EXPIRATIONSECONDS

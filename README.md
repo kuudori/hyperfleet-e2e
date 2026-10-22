@@ -47,9 +47,13 @@ See [perf/README.md](perf/README.md).
 
 Configuration priority (highest to lowest):
 1. CLI flags (`--api-url`)
-2. Environment variables (`HYPERFLEET_API_URL`)
+2. Environment variables (`HYPERFLEET_API_URL`; `AUTH_MODE` is unprefixed)
 3. Config file (`configs/config.yaml`)
 4. Built-in defaults
+
+The authentication mode controls where E2E requests are authenticated. Set it
+to match the deployed infrastructure. See the [setup guide](docs/setup.md#authentication-mode)
+for supported modes, defaults, and token requirements.
 
 **Example**:
 ```bash

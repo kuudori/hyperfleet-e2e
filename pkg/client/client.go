@@ -19,33 +19,47 @@ type HyperFleetClient struct {
 // ClientOption configures the HyperFleet client.
 type ClientOption func(*HyperFleetClient)
 
-// WithBearerToken returns a ClientOption that injects a JWT bearer token
-// into all outgoing requests via a custom round-tripper.
-func WithBearerToken(token string) ClientOption {
+// WithAuthorizationToken returns a ClientOption that injects a token with the
+// requested Authorization scheme into requests for the API host.
+func WithAuthorizationToken(token, scheme string) ClientOption {
+	if scheme == "" {
+		scheme = "Bearer"
+	}
 	return func(c *HyperFleetClient) {
 		// baseURL is validated in NewHyperFleetClient, so Parse cannot fail here.
 		u, _ := url.Parse(c.baseURL)
 		host := u.Host
 		c.httpClient.Transport = &authTransport{
-			base:  c.httpClient.Transport,
-			token: token,
-			host:  host,
+			base:   c.httpClient.Transport,
+			token:  token,
+			scheme: scheme,
+			host:   host,
 		}
 	}
+}
+
+// WithBearerToken returns a ClientOption that injects a JWT bearer token.
+func WithBearerToken(token string) ClientOption {
+	return WithAuthorizationToken(token, "Bearer")
 }
 
 // authTransport injects an Authorization header into requests targeting the API host.
 // It does not attach the token to cross-origin redirects (CWE-200/CWE-522).
 type authTransport struct {
-	base  http.RoundTripper
-	token string
-	host  string
+	base   http.RoundTripper
+	token  string
+	scheme string
+	host   string
 }
 
 func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	r := req.Clone(req.Context())
 	if t.host == "" || r.URL.Host == t.host {
-		r.Header.Set("Authorization", "Bearer "+t.token)
+		scheme := t.scheme
+		if scheme == "" {
+			scheme = "Bearer"
+		}
+		r.Header.Set("Authorization", scheme+" "+t.token)
 	}
 	base := t.base
 	if base == nil {

@@ -37,6 +37,49 @@ func TestWithBearerToken(t *testing.T) {
 	}
 }
 
+func TestWithAuthorizationTokenScheme(t *testing.T) {
+	tests := []struct {
+		name   string
+		scheme string
+		want   string
+	}{
+		{name: "ServiceAccount", scheme: "ServiceAccount", want: "ServiceAccount token-value"},
+		{name: "empty scheme defaults to Bearer", want: "Bearer token-value"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var gotAuth string
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotAuth = r.Header.Get("Authorization")
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer ts.Close()
+
+			c, err := NewHyperFleetClient(ts.URL, nil, WithAuthorizationToken("token-value", tt.scheme))
+			if err != nil {
+				t.Fatalf("NewHyperFleetClient: %v", err)
+			}
+
+			req, err := http.NewRequest(http.MethodGet, ts.URL+"/test", nil)
+			if err != nil {
+				t.Fatalf("NewRequest: %v", err)
+			}
+			resp, err := c.httpClient.Do(req)
+			if err != nil {
+				t.Fatalf("Do: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			if gotAuth != tt.want {
+				t.Errorf("Authorization header = %q, want %q", gotAuth, tt.want)
+			}
+		})
+	}
+}
+
 func TestAuthTransportNilBase(t *testing.T) {
 	t.Parallel()
 

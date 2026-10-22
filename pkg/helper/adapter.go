@@ -281,9 +281,12 @@ func (h *Helper) adapterHelmSetArgs(releaseName string, opts AdapterDeploymentOp
 		args = append(args, "--set", fmt.Sprintf("image.pullPolicy=%s", policy))
 	}
 
-	// Enable adapter API auth when JWT is enabled on the API server
-	if h.Cfg.Identity.TokenRequest.IsEnabled() {
+	// Authenticated modes require adapters to send their projected ServiceAccount token.
+	if h.Cfg.AdapterAuthEnabled() {
 		args = append(args, "--set", "adapterConfig.hyperfleetApi.auth.enabled=true")
+		if h.Cfg.AuthMode == config.AuthModeEdge || h.Cfg.AuthMode == config.AuthModeEdgeAPI {
+			args = append(args, "--set", "adapterConfig.hyperfleetApi.auth.scheme="+config.AuthorizationSchemeServiceAccount)
+		}
 	}
 
 	// Add additional --set values if provided
