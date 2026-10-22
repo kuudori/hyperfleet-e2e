@@ -37,10 +37,10 @@ timeouts:
   # pkg/config/descriptor.go). Override them under timeouts.<kind>, where <kind>
   # is any descriptor kind in lower case (cluster, nodepool, parent,
   # cascadechild, ...). A field left out or set to zero keeps the row default;
-  # an unknown <kind> or field, or a string without a unit ("300"), fails the run.
+  # an unknown <kind> or field, or a value without a unit ("300" or 300), fails
+  # the run.
   #
-  # Format: Duration string with a unit (e.g., "30m", "1h", "5m"); a bare number
-  # is read as nanoseconds
+  # Format: Duration string with a unit (e.g., "30m", "1h", "5m")
   # Can be overridden by:
   #   - HYPERFLEET_TIMEOUTS_<KIND>_RECONCILED (time to reach the Reconciled condition)
   #   - HYPERFLEET_TIMEOUTS_<KIND>_DELETED (time to hard-delete, a 404 response)
