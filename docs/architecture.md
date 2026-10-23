@@ -157,7 +157,8 @@ derived from parent plural, parent ID and plural.
 
 `config.Load()` overlays the kind-keyed config on the row defaults, builds and
 validates the catalog once, and stores it in `Config.Entities`; `helper.New()`
-uses the same catalog. Config keys are the kind in lower case:
+uses the same catalog. Config keys are the kind in lower case, env vars the kind
+in upper case:
 
 - `adapters.<kind>` or `HYPERFLEET_ADAPTERS_<KIND>` (comma- or space-separated) replaces the
   row's adapter list. Blank names are dropped, and the list must name at least
