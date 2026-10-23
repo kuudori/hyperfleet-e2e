@@ -325,7 +325,7 @@ func Load() (*Config, error) {
 
 	entities, err := loadEntityCatalog()
 	if err != nil {
-		return nil, fmt.Errorf("configuration validation failed: %w", err)
+		return nil, fmt.Errorf("loading entity catalog failed: %w", err)
 	}
 	cfg.Entities = entities
 
