@@ -37,6 +37,7 @@ Run `make check` before you call work done, then `make build`.
 - Which layer a test belongs in (unit / integration / E2E): [test placement strategy](https://github.com/openshift-hyperfleet/architecture/blob/main/hyperfleet/docs/e2e-testing/test-placement-strategy.md)
 - Config defaults, struct, file: `pkg/config/defaults.go`, `pkg/config/config.go`, `configs/config.yaml`
 - Pollers and matchers: `pkg/helper/pollers.go`, `pkg/helper/matchers.go`. Reuse these before writing new ones
+- Logging standard: [HyperFleet logging specification](https://github.com/openshift-hyperfleet/architecture/blob/main/hyperfleet/standards/logging-specification.md)
 
 ## Writing E2E specs
 
