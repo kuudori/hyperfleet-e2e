@@ -135,6 +135,88 @@ func TestPatchEntityRequiredAdapters(t *testing.T) {
 	}
 }
 
+// A read-modify-write of the Helm values must not add parent fields to a root
+// entity: the API chart's schema only allows cascade or restrict for
+// on_parent_delete, so an empty string would fail the upgrade.
+func TestAPIEntityMarshalOmitsEmptyParentFields(t *testing.T) {
+	t.Parallel()
+	const values = `config:
+  entities:
+    - kind: Cluster
+      plural: clusters
+      required_adapters: [cl-namespace]
+    - kind: NodePool
+      plural: nodepools
+      parent_kind: Cluster
+      on_parent_delete: cascade
+      required_adapters: [np-configmap]
+`
+	var vals apiValues
+	if err := yaml.Unmarshal([]byte(values), &vals); err != nil {
+		t.Fatal(err)
+	}
+	out, err := yaml.Marshal(vals)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var decoded struct {
+		Config struct {
+			Entities []map[string]any `yaml:"entities"`
+		} `yaml:"config"`
+	}
+	if err := yaml.Unmarshal(out, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Config.Entities) != 2 {
+		t.Fatalf("entities = %d, want 2:\n%s", len(decoded.Config.Entities), out)
+	}
+	for _, key := range []string{"parent_kind", "on_parent_delete"} {
+		if _, exists := decoded.Config.Entities[0][key]; exists {
+			t.Errorf("root entity gained %q on round-trip:\n%s", key, out)
+		}
+	}
+	child := decoded.Config.Entities[1]
+	if child["parent_kind"] != "Cluster" || child["on_parent_delete"] != "cascade" {
+		t.Errorf("child parent fields lost on round-trip:\n%s", out)
+	}
+}
+
+// assertUnmodeledEntityFields checks the applied YAML directly, so a dropped
+// inline catch-all fails here instead of only on a live release.
+func assertUnmodeledEntityFields(t *testing.T, applied []byte) {
+	t.Helper()
+	var values map[string]any
+	if err := yaml.Unmarshal(applied, &values); err != nil {
+		t.Fatal(err)
+	}
+	entities := values["config"].(map[string]any)["entities"].([]any)
+	cluster := entities[0].(map[string]any)
+	for field, want := range map[string]any{
+		"spec_schema_name":    "cluster",
+		"require_spec_schema": true,
+		"name_min_len":        3,
+		"name_max_len":        63,
+	} {
+		if cluster[field] != want {
+			t.Errorf("cluster %s = %v, want %v", field, cluster[field], want)
+		}
+	}
+	references, ok := entities[1].(map[string]any)["references"].([]any)
+	if !ok || len(references) != 1 {
+		t.Fatalf("nodepool references lost on round-trip: %v", entities[1])
+	}
+	reference, ok := references[0].(map[string]any)
+	if !ok {
+		t.Fatalf("reference is not a mapping: %v", references[0])
+	}
+	for field, want := range map[string]any{"name": "cluster", "target_kind": "Cluster", "min": 1, "max": 1} {
+		if reference[field] != want {
+			t.Errorf("reference %s = %v, want %v", field, reference[field], want)
+		}
+	}
+}
+
 // Exercise the real get/patch/upgrade/ready/restore call chain with a local Helm
 // stand-in. No Kubernetes or Helm installation is used by these tests.
 func TestUpgradeAndRestoreDescriptorAdapters(t *testing.T) {
@@ -148,11 +230,20 @@ config:
     - kind: Cluster
       plural: clusters
       required_adapters: [cl-base]
+      spec_schema_name: cluster
+      require_spec_schema: true
+      name_min_len: 3
+      name_max_len: 63
     - kind: NodePool
       plural: nodepools
       parent_kind: Cluster
       on_parent_delete: cascade
       required_adapters: [np-base]
+      references:
+        - name: cluster
+          target_kind: Cluster
+          min: 1
+          max: 1
 `
 	dir := t.TempDir()
 	input := filepath.Join(dir, "input.yaml")
@@ -206,17 +297,26 @@ esac
 		if err != nil {
 			t.Fatal(err)
 		}
-		var got, before apiValues
+		// Compare raw YAML maps, not apiValues. Decoding both sides through the
+		// same struct would let a loss in the inline catch-all cancel out, and
+		// the fixture carries entity fields this package does not model.
+		var got, before map[string]any
 		if err := yaml.Unmarshal(data, &got); err != nil {
 			t.Fatal(err)
 		}
 		if err := yaml.Unmarshal([]byte(originalValues), &before); err != nil {
 			t.Fatal(err)
 		}
-		before.Config.Entities[1].RequiredAdapters = want
+		entities := before["config"].(map[string]any)["entities"].([]any)
+		patched := make([]any, len(want))
+		for i, adapter := range want {
+			patched[i] = adapter
+		}
+		entities[1].(map[string]any)["required_adapters"] = patched
 		if !reflect.DeepEqual(got, before) {
 			t.Fatalf("Helm round-trip changed unrelated values:\n%s", data)
 		}
+		assertUnmodeledEntityFields(t, data)
 	}
 	assertApplied(updated)
 	if err := h.RestoreAPIRequiredAdaptersWithRetry(t.Context(), e, "chart", "namespace", baseline, 1); err != nil {
