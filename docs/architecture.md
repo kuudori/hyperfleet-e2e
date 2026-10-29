@@ -151,7 +151,8 @@ The catalog is built after configuration has been resolved. `pkg/descriptor`
 owns the type, catalog and path construction, with no config or helper imports.
 The single table is `EntityDescriptors` in `pkg/config/descriptor.go`. Each row
 combines routing, cleanup and the default runtime settings: required adapters,
-`Timeouts` and perf `Thresholds`. There is no second kind switch, config field,
+`Timeouts` and perf `Thresholds`. The `Fixture` flag marks the role-named kinds
+that `e2e/capability` runs on. There is no second kind switch, config field,
 default constant or env alias to update when adding a row. Nested paths are
 derived from parent plural, parent ID and plural.
 
@@ -189,11 +190,11 @@ each row with adapters or timeouts in the "Loaded configuration" entry.
 The suite's startup drift guard is `helper.ValidateAPIEntityConfig`; see
 [pkg/e2e](#pkge2e) for when it runs.
 
-Fixture rows register routing and cleanup metadata. Parent and CascadeChild wait
-for hard-delete, so they default to the Cluster timeouts; their adapters and the
-fixture thresholds are unset until the fixture adapters are deployed and
-baselined. They are not runnable E2E fixtures yet; registration does not contact
-an API route or establish performance baselines.
+Parent and CascadeChild are adapter-backed fixtures that `e2e/capability` runs
+on: each row names the success adapter hyperfleet-infra deploys for its plural
+(`parents-success`, `cascadechildren-success`), and both wait for hard-delete
+with the Cluster timeouts. RestrictChild, Referencer and Target register routing
+and cleanup only. Fixture thresholds stay unset until HYPERFLEET-1734.
 
 Cleanup policy preserves existing behavior: Cluster and NodePool wait for 404,
 Channel explicitly deletes eligible Versions before itself, and WifConfig still

@@ -116,9 +116,26 @@ func TestEntityCatalogRowDefaults(t *testing.T) {
 		t.Error("nested write thresholds changed")
 	}
 
-	for _, kind := range []string{"Parent", "CascadeChild"} {
-		if e := catalog.MustGet(kind); len(e.RequiredAdapters) != 0 || e.Thresholds != (descriptor.EntityThresholds{}) {
-			t.Errorf("fixture %s received invented adapters or thresholds", kind)
+	for kind, adapters := range map[string][]string{
+		"Parent":       {"parents-success"},
+		"CascadeChild": {"cascadechildren-success"},
+	} {
+		e := catalog.MustGet(kind)
+		if !slices.Equal(e.RequiredAdapters, adapters) {
+			t.Errorf("fixture %s adapters = %q, want the hyperfleet-infra release names %q", kind, e.RequiredAdapters, adapters)
+		}
+		if e.Thresholds != (descriptor.EntityThresholds{}) {
+			t.Errorf("fixture %s received invented thresholds", kind)
+		}
+	}
+	for _, kind := range []string{"Parent", "CascadeChild", "RestrictChild", "Referencer", "Target"} {
+		if !catalog.MustGet(kind).Fixture {
+			t.Errorf("%s is not marked as a fixture", kind)
+		}
+	}
+	for _, kind := range []string{"Cluster", "NodePool", "Channel", "Version", "WifConfig"} {
+		if catalog.MustGet(kind).Fixture {
+			t.Errorf("production kind %s is marked as a fixture", kind)
 		}
 	}
 	for _, kind := range []string{"RestrictChild", "Referencer", "Target"} {

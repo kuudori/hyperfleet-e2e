@@ -38,22 +38,22 @@ var defaultEntityTimeouts = descriptor.EntityTimeouts{Reconciled: 2 * time.Minut
 // cleanup and the default runtime settings; config only overrides adapters and
 // timeouts by kind. Adding a descriptor needs one row here and no config field,
 // default constant, env alias, helper or kind-dispatch code.
-//
-// Parent and CascadeChild wait for hard-delete, so they carry default timeouts.
-// Their adapter release names do not exist yet (HYPERFLEET-1729). Registration
-// alone does not make a fixture runnable or contact its API route.
 func EntityDescriptors() []descriptor.EntityDescriptor {
 	return []descriptor.EntityDescriptor{
-		{Kind: "Parent", Plural: "parents",
-			Timeouts: defaultEntityTimeouts,
-			Cleanup:  descriptor.CleanupPolicy{WaitForHardDelete: true, IgnoreNotFound: true}},
-		{Kind: "CascadeChild", Plural: "cascadechildren", ParentKind: "Parent", OnParentDelete: "cascade",
-			Timeouts: defaultEntityTimeouts,
-			Cleanup:  descriptor.CleanupPolicy{WaitForHardDelete: true, IgnoreNotFound: true}},
-		{Kind: "RestrictChild", Plural: "restrictchildren", ParentKind: "Parent", OnParentDelete: "restrict",
+		{Kind: "Parent", Plural: "parents", Fixture: true,
+			// The release name hyperfleet-infra gives the Parent success adapter.
+			RequiredAdapters: []string{"parents-success"},
+			Timeouts:         defaultEntityTimeouts,
+			Cleanup:          descriptor.CleanupPolicy{WaitForHardDelete: true, IgnoreNotFound: true}},
+		{Kind: "CascadeChild", Plural: "cascadechildren", ParentKind: "Parent", OnParentDelete: "cascade", Fixture: true,
+			// The release name hyperfleet-infra gives the CascadeChild success adapter.
+			RequiredAdapters: []string{"cascadechildren-success"},
+			Timeouts:         defaultEntityTimeouts,
+			Cleanup:          descriptor.CleanupPolicy{WaitForHardDelete: true, IgnoreNotFound: true}},
+		{Kind: "RestrictChild", Plural: "restrictchildren", ParentKind: "Parent", OnParentDelete: "restrict", Fixture: true,
 			Cleanup: descriptor.CleanupPolicy{IgnoreNotFound: true}},
-		{Kind: "Referencer", Plural: "referencers", Cleanup: descriptor.CleanupPolicy{IgnoreNotFound: true}},
-		{Kind: "Target", Plural: "targets", Cleanup: descriptor.CleanupPolicy{IgnoreNotFound: true}},
+		{Kind: "Referencer", Plural: "referencers", Fixture: true, Cleanup: descriptor.CleanupPolicy{IgnoreNotFound: true}},
+		{Kind: "Target", Plural: "targets", Fixture: true, Cleanup: descriptor.CleanupPolicy{IgnoreNotFound: true}},
 		{
 			Kind: "Cluster", Plural: "clusters",
 			// The release names hyperfleet-infra gives the cluster adapters.
