@@ -13,14 +13,14 @@ import (
 )
 
 var _ = ginkgo.Describe(
-	"[Capability: recreate-after-hard-delete] A name is reusable once its resource is hard-deleted",
+	"[Capability: recreate-after-hard-delete] Re-create After Hard-delete",
 	ginkgo.Label(labels.Tier0, labels.Capability),
 	func() {
 		rows := fixtureRows(recreateKind)
 		failWhenEmpty("recreate-after-hard-delete", rows)
 
 		for _, row := range rows {
-			ginkgo.It("re-creates "+row.Kind+" with the same name", func(ctx context.Context) {
+			ginkgo.It("should re-create "+row.Kind+" with the same name after hard-delete", func(ctx context.Context) {
 				h := helper.New()
 				entity := resolve(h, row.Kind)
 				interval := h.Cfg.Polling.Interval

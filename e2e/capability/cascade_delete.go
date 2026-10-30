@@ -13,14 +13,14 @@ import (
 )
 
 var _ = ginkgo.Describe(
-	"[Capability: cascade-delete] Deleting a parent cascades through adapter-backed children",
+	"[Capability: cascade-delete] Cascade Deletion Through Adapter-backed Children",
 	ginkgo.Label(labels.Tier0, labels.Capability),
 	func() {
 		rows := fixtureRows(cascadeChildKind)
 		failWhenEmpty("cascade-delete", rows)
 
 		for _, row := range rows {
-			ginkgo.It("cascades from "+row.ParentKind+" to "+row.Kind, func(ctx context.Context) {
+			ginkgo.It("should cascade deletion from "+row.ParentKind+" to "+row.Kind, func(ctx context.Context) {
 				h := helper.New()
 				child := resolve(h, row.Kind)
 				parent := resolve(h, child.ParentKind)

@@ -15,14 +15,14 @@ import (
 )
 
 var _ = ginkgo.Describe(
-	"[Capability: adapter-backed-lifecycle] Adapter-backed resource create, update and delete journey",
+	"[Capability: adapter-backed-lifecycle] Adapter-backed Resource Lifecycle",
 	ginkgo.Label(labels.Tier0, labels.Capability),
 	func() {
 		rows := fixtureRows(lifecycleKind)
 		failWhenEmpty("adapter-backed-lifecycle", rows)
 
 		for _, row := range rows {
-			ginkgo.It("runs the journey on "+row.Kind, func(ctx context.Context) {
+			ginkgo.It("should create, update and delete "+row.Kind+" through its adapters", func(ctx context.Context) {
 				h := helper.New()
 				entity := resolve(h, row.Kind)
 				interval := h.Cfg.Polling.Interval

@@ -59,7 +59,7 @@ func failWhenEmpty(capability string, rows []descriptor.EntityDescriptor) {
 	if len(rows) > 0 {
 		return
 	}
-	ginkgo.It("has a fixture kind to run on", func() {
+	ginkgo.It("should have a fixture kind to run on", func() {
 		ginkgo.Fail(fmt.Sprintf("no fixture kind in the descriptor table has the shape capability %q needs", capability))
 	})
 }
