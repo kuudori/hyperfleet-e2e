@@ -22,7 +22,6 @@ type EntityDescriptor struct {
 	Cleanup          CleanupPolicy
 	Thresholds       EntityThresholds
 	Timeouts         EntityTimeouts
-	Fixture          bool // a role-named kind that e2e/capability runs on
 }
 
 type EntityTimeouts struct {

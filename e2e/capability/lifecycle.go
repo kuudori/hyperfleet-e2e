@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega" //nolint:staticcheck // dot import for test readability
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/descriptor"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/labels"
@@ -18,20 +19,17 @@ var _ = ginkgo.Describe(
 	"[Capability: adapter-backed-lifecycle] Adapter-backed Resource Lifecycle",
 	ginkgo.Label(labels.Tier0, labels.Capability),
 	func() {
-		rows := fixtureRows(lifecycleKind)
-		failWhenEmpty("adapter-backed-lifecycle", rows)
-
-		for _, row := range rows {
-			ginkgo.It("should create, update and delete "+row.Kind+" through its adapters", func(ctx context.Context) {
+		for _, kind := range []string{config.KindParent, config.KindCascadeChild} {
+			ginkgo.It("should create, update and delete "+kind+" through its adapters", func(ctx context.Context) {
 				h := helper.New()
-				entity := resolve(h, row.Kind)
+				entity := h.Entities.MustGet(kind)
 				interval := h.Cfg.Polling.Interval
 
 				var parent descriptor.EntityDescriptor
 				var parentID string
 				if entity.ParentKind != "" {
 					ginkgo.By("creating the parent " + entity.ParentKind + " and waiting for Reconciled")
-					parent = resolve(h, entity.ParentKind)
+					parent = h.Entities.MustGet(entity.ParentKind)
 					parentID = *createFixture(ctx, h, parent, "").ID
 					Eventually(h.Poll(ctx, parent, "", parentID), parent.Timeouts.Reconciled, interval).
 						Should(helper.HaveResourceCondition(client.ConditionTypeReconciled, client.ResourceConditionStatusTrue))

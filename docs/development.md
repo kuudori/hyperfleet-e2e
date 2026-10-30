@@ -125,7 +125,7 @@ var lifecycleTestName = "[Suite: cluster][baseline] Full Cluster Creation Flow"
 - Suite represents the HyperFleet component being tested (cluster, nodepool, adapter)
 - Category describes the test type: `baseline`, `update`, `delete`, `concurrent`, `negative`
 - Use clear, descriptive names
-- Capability specs in `e2e/capability/` use `[Capability: <name>] Description`, carry `labels.Capability`, and create one `It` per fixture kind from the descriptor table.
+- Capability specs in `e2e/capability/` use `[Capability: <name>] Description`, carry `labels.Capability`, and take each fixture kind by its role constant, for example `h.Entities.MustGet(config.KindCascadeChild)`.
 
 ### 2. Labels
 

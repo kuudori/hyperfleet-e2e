@@ -117,8 +117,8 @@ func TestEntityCatalogRowDefaults(t *testing.T) {
 	}
 
 	for kind, adapters := range map[string][]string{
-		"Parent":       {"parents-success"},
-		"CascadeChild": {"cascadechildren-success"},
+		KindParent:       {"parents-success"},
+		KindCascadeChild: {"cascadechildren-success"},
 	} {
 		e := catalog.MustGet(kind)
 		if !slices.Equal(e.RequiredAdapters, adapters) {
@@ -126,16 +126,6 @@ func TestEntityCatalogRowDefaults(t *testing.T) {
 		}
 		if e.Thresholds != (descriptor.EntityThresholds{}) {
 			t.Errorf("fixture %s received invented thresholds", kind)
-		}
-	}
-	for _, kind := range []string{"Parent", "CascadeChild", "RestrictChild", "Referencer", "Target"} {
-		if !catalog.MustGet(kind).Fixture {
-			t.Errorf("%s is not marked as a fixture", kind)
-		}
-	}
-	for _, kind := range []string{"Cluster", "NodePool", "Channel", "Version", "WifConfig"} {
-		if catalog.MustGet(kind).Fixture {
-			t.Errorf("production kind %s is marked as a fixture", kind)
 		}
 	}
 	for _, kind := range []string{"RestrictChild", "Referencer", "Target"} {
