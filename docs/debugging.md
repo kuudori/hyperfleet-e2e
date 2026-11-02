@@ -373,6 +373,15 @@ kubectl patch configmap cluster-config -n <cluster-id>-remote --type=strategic \
   -p '{"metadata":{"$deleteFromPrimitiveList/finalizers":["e2e.hyperfleet.io/hold"]}}'
 ```
 
+### Who Cleans What
+
+| Cleaner | When | Cleans |
+|---------|------|--------|
+| Prow post steps `openshift-hyperfleet-e2e-cleanup-cluster-resources` and `openshift-hyperfleet-e2e-cleanup-cloud-provider` | After each run | That run's own Helm releases, namespace and Pub/Sub topics and subscriptions |
+| `namespace-cleaner` CronJob | Hourly, on `hyperfleet-dev-prow` | What killed or failed runs left behind |
+
+The cleaner lives in hyperfleet-infra, and its [Namespace Cleaner](https://github.com/openshift-hyperfleet/hyperfleet-infra#namespace-cleaner) section lists what it deletes.
+
 ### Deletion Flow (Production)
 
 For the full production deletion lifecycle (mark → Sentinel → Adapter cleanup → Finalized → hard delete), see the [adapter deletion flow design](https://github.com/openshift-hyperfleet/architecture/blob/main/hyperfleet/components/adapter/framework/adapter-deletion-flow-design.md) in the architecture repo.

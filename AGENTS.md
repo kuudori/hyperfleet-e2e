@@ -17,13 +17,13 @@ Spec suites live in `e2e/<suite>/`, one directory per suite. Each suite is regis
 
 Run `make check` before you call work done, then `make build`.
 
-- `make check`: `generate`, `fmt-check`, `vet`, `lint`, unit tests, `verify-tools` (fails if `tools/go.mod` drifted)
+- `make check`: `generate`, `fmt-check`, `vet`, `lint`, unit and shell script tests, `verify-tools` (fails if `tools/go.mod` drifted)
 - `make fmt`: pinned `golangci-lint fmt ./...` applies `gofmt` and `goimports`; `fmt-check` checks the same formatters without rewriting files
 - `make gofmt`: alias for `make fmt` (used by the `hyperfleet-gofmt` pre-commit hook)
 - `make go-vet`: alias for `make vet` (used by the `hyperfleet-go-vet` pre-commit hook)
 - `make install-hooks`: installs the pre-commit hooks (`.pre-commit-config.yaml`: secret scanning, commitlint, Go tooling, file hygiene)
 - `make lint`: verifies `.golangci.yml` against the v2 schema, then runs golangci-lint pinned in `tools/go.mod`
-- `make test`: unit tests for `./pkg/...` and `./cmd/...`, with race detection and coverage. E2E specs need a live environment; see `docs/setup.md`
+- `make test`: unit tests for `./pkg/...` and `./cmd/...`, with race detection and coverage, plus the shell script tests (`make test-scripts`). E2E specs need a live environment; see `docs/setup.md`
 - `make list-tests`: dry run that lists specs by tier. Use it to check labels and names without a cluster; dry runs skip the startup entity drift check
 
 ## Where to look
