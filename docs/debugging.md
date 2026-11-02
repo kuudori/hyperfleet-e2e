@@ -344,6 +344,9 @@ Check for orphaned resources:
 # Find orphaned namespaces
 kubectl get namespaces | grep -E '^e2e-|^test-'
 
+# Find what the end-of-suite sweep left behind for a run, including remote namespaces
+kubectl get namespaces -l e2e.hyperfleet.io/run-id=<RUN_ID>
+
 # Check for leftover pods
 kubectl get pods -A | grep hyperfleet
 ```
