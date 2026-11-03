@@ -9,7 +9,6 @@ set -euo pipefail
 NAMESPACE=""
 GCP_PROJECT_ID="${GCP_PROJECT_ID:-}"
 DRY_RUN=false
-RESOURCE_TYPES=("clusters" "nodepools")
 
 # ============================================================================
 # Logging Functions
@@ -130,12 +129,14 @@ discover_pubsub_topics() {
         return 1
     fi
 
-    # List topics that match the namespace pattern
-    # NAMESPACE must be unique and DNS-1123 compliant (default: hyperfleet-e2e-$USER when using .env)
-    # Topics are named:
-    #   - ${NAMESPACE}-${resource_type}  (e.g., hyperfleet-e2e-jdoe-clusters, hyperfleet-e2e-jdoe-nodepools)
+    # Every topic the run creates starts with "${NAMESPACE}-", whatever the entity
+    # kind, so no kind list is kept here:
+    #   - ${NAMESPACE}-${resource_type}  (e.g., hyperfleet-e2e-jdoe-clusters)
     #   - ${NAMESPACE}-${resource_type}-dlq  (e.g., hyperfleet-e2e-jdoe-clusters-dlq)
     #   - ${NAMESPACE}-${resource_type}-${adapter_name}-dlq  (e.g., hyperfleet-e2e-jdoe-clusters-adapter1-dlq)
+    # NAMESPACE must be unique, and no other namespace in the project may start
+    # with "${NAMESPACE}-": its resources would match too. Prow run namespaces are
+    # e2e-<build ID>, so they never do.
     local topics=()
     local all_topics
 
@@ -153,21 +154,7 @@ discover_pubsub_topics() {
         # Extract topic name from full path (projects/{project}/topics/{topic-name})
         local topic_name="${topic##*/}"
 
-        # Match topics with all naming patterns:
-        # 1. Main topics: ${namespace}-${resource_type}
-        # 2. DLQ topics (intended): ${namespace}-${resource_type}-dlq
-        # 3. DLQ topics (temporary/Helm bug): ${namespace}-${resource_type}-${adapter_name}-dlq
-        local matched=false
-        for resource_type in "${RESOURCE_TYPES[@]}"; do
-            if [[ "${topic_name}" == "${namespace}-${resource_type}" ]] || \
-               [[ "${topic_name}" == "${namespace}-${resource_type}-dlq" ]] || \
-               [[ "${topic_name}" =~ ^${namespace}-${resource_type}-.+-dlq$ ]]; then
-                matched=true
-                break
-            fi
-        done
-
-        if [[ "${matched}" == "true" ]]; then
+        if [[ "${topic_name}" == "${namespace}-"* ]]; then
             topics+=("${topic_name}")
         fi
     done <<< "${all_topics}"
@@ -197,10 +184,9 @@ discover_pubsub_subscriptions() {
         return 1
     fi
 
-    # List subscriptions that match the namespace pattern
-    # NAMESPACE must be unique and DNS-1123 compliant (default: hyperfleet-e2e-$USER when using .env)
-    # Subscriptions are named: ${NAMESPACE}-${resource_type}-${adapter_name}
-    # Example: hyperfleet-e2e-jdoe-clusters-adapter1, <unique-namespace>-clusters-adapter1
+    # Subscriptions are named ${NAMESPACE}-${resource_type}-${adapter_name}
+    # (e.g., hyperfleet-e2e-jdoe-clusters-adapter1), so they match on the same
+    # "${NAMESPACE}-" prefix as topics.
     local subscriptions=()
     local all_subscriptions
 
@@ -218,17 +204,7 @@ discover_pubsub_subscriptions() {
         # Extract subscription name from full path (projects/{project}/subscriptions/{subscription-name})
         local subscription_name="${subscription##*/}"
 
-        # Match subscriptions with the expected naming pattern:
-        # ${namespace}-${resource_type}-${adapter_name}
-        local matched=false
-        for resource_type in "${RESOURCE_TYPES[@]}"; do
-            if [[ "${subscription_name}" =~ ^${namespace}-${resource_type}-.+ ]]; then
-                matched=true
-                break
-            fi
-        done
-
-        if [[ "${matched}" == "true" ]]; then
+        if [[ "${subscription_name}" == "${namespace}-"* ]]; then
             subscriptions+=("${subscription_name}")
         fi
     done <<< "${all_subscriptions}"
@@ -251,6 +227,13 @@ discover_pubsub_subscriptions() {
 # GCP Pub/Sub Deletion Functions
 # ============================================================================
 
+# A delete that finds the resource already gone is a success: something else,
+# such as the E2E suite, got there first. Match only the Pub/Sub message: a broad
+# match would also accept "credentials were not found".
+is_not_found() {
+    [[ "$1" == *"Resource not found"* ]]
+}
+
 delete_pubsub_subscription() {
     local subscription_name="$1"
     local project_id="${GCP_PROJECT_ID}"
@@ -262,13 +245,17 @@ delete_pubsub_subscription() {
 
     log_info "Deleting subscription: ${subscription_name}"
 
-    if gcloud pubsub subscriptions delete "${subscription_name}" \
+    local output
+    if output=$(gcloud pubsub subscriptions delete "${subscription_name}" \
         --project="${project_id}" \
-        --quiet 2>/dev/null; then
+        --quiet 2>&1); then
         log_success "Deleted subscription: ${subscription_name}"
         return 0
+    elif is_not_found "${output}"; then
+        log_info "Subscription already deleted: ${subscription_name}"
+        return 0
     else
-        log_error "Failed to delete subscription: ${subscription_name}"
+        log_error "Failed to delete subscription: ${subscription_name}: ${output}"
         return 1
     fi
 }
@@ -284,13 +271,17 @@ delete_pubsub_topic() {
 
     log_info "Deleting topic: ${topic_name}"
 
-    if gcloud pubsub topics delete "${topic_name}" \
+    local output
+    if output=$(gcloud pubsub topics delete "${topic_name}" \
         --project="${project_id}" \
-        --quiet 2>/dev/null; then
+        --quiet 2>&1); then
         log_success "Deleted topic: ${topic_name}"
         return 0
+    elif is_not_found "${output}"; then
+        log_info "Topic already deleted: ${topic_name}"
+        return 0
     else
-        log_error "Failed to delete topic: ${topic_name}"
+        log_error "Failed to delete topic: ${topic_name}: ${output}"
         return 1
     fi
 }

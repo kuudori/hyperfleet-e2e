@@ -72,8 +72,15 @@ clean: ## Remove build artifacts
 FLAKE_ATTEMPTS ?= 2
 
 .PHONY: test
-test: generate ## Run unit tests
+test: generate test-scripts ## Run unit tests and cleanup script tests
 	$(GO) test -v -race -cover -coverprofile=coverage.out ./pkg/... ./cmd/...
+
+.PHONY: test-scripts
+test-scripts: ## Run the shell script tests in scripts/
+	@set -e; for t in scripts/*_test.sh; do \
+		echo "==> $$t"; \
+		bash "$$t"; \
+	done
 
 .PHONY: test-coverage
 test-coverage: test ## Run tests and generate HTML coverage report
