@@ -160,8 +160,8 @@ OIDC issuer before any spec runs. If the mint fails, the suite stops with
 causes in this order:
 
 1. The mock issuer is not deployed. HyperFleet deploys it only with
-   `OIDC_ISSUER_MODE=mock`. This is the hyperfleet-infra default for
-   `e2e-kind` and `e2e-gcp`. Run:
+   `OIDC_ISSUER_MODE=mock`. See
+   [Authentication mode](setup.md#authentication-mode). Run:
 
    ```bash
    kubectl get deployment,service hyperfleet-mock-oidc --namespace "$NAMESPACE"
@@ -201,8 +201,8 @@ HTTP status:
 
 A run with `AUTH_MODE=EDGE` against an `EDGE+API` deployment (or the reverse)
 passes this check, because both modes accept the human token. The run fails
-later, in the `created_by` and `deleted_by` checks. The suite expects
-`system@hyperfleet.local` in `EDGE` and the email of the human in `EDGE+API`.
+later, in the `created_by` and `deleted_by` checks, because the expected value
+depends on the mode. See [Authentication mode](setup.md#authentication-mode).
 
 ---
 

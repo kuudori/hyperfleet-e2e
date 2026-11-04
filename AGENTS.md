@@ -79,7 +79,7 @@ Eventually(h.Poll(ctx, h.Entities.MustGet("Cluster"), "", clusterID), h.Entities
 
 ### API identity
 
-Use `h.Client` for API operations. It acts as the default human. Use machine tokens only in the machine-auth specs in `e2e/auth`. When tenant isolation is on, machine identities can only read and write status.
+Use `h.Client` for API operations. It acts as the default human. Use machine tokens only in the machine-auth specs in `e2e/auth`. See `docs/development.md#api-identities`.
 
 ### Audit identity (JWT)
 

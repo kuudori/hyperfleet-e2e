@@ -12,7 +12,7 @@ const DefaultAuthMode = AuthModeEdgeAPI
 // DefaultTenantModel matches the hyperfleet-infra deploy default (TENANT_MODEL).
 const DefaultTenantModel = identity.TenantModelOnPrem
 
-// DefaultE2ERunnerServiceAccountName is the fixed machine identity for E2E requests.
+// DefaultE2ERunnerServiceAccountName is the fixed machine identity of the machine-auth specs.
 const DefaultE2ERunnerServiceAccountName = "hyperfleet-e2e-runner"
 
 // Log level constants

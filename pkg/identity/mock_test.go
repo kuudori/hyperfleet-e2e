@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	k8sclient "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
 )
 
 // fakeIssuer stands in for the API server proxy to the mock OIDC server: it
@@ -23,6 +25,8 @@ type fakeIssuer struct {
 	expiresIn int
 	mu        sync.Mutex
 	hits      atomic.Int32
+	// failNext rejects the next mint.
+	failNext atomic.Bool
 }
 
 func newFakeIssuer(t *testing.T, expiresIn int) *fakeIssuer {
@@ -30,6 +34,10 @@ func newFakeIssuer(t *testing.T, expiresIn int) *fakeIssuer {
 	f := &fakeIssuer{expiresIn: expiresIn}
 	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := f.hits.Add(1)
+		if f.failNext.CompareAndSwap(true, false) {
+			http.Error(w, "issuer unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -114,36 +122,35 @@ func TestTokenSourceSharesOneMintAcrossCallers(t *testing.T) {
 	}
 }
 
-func TestTokenSourceCachesPerHuman(t *testing.T) {
+func TestTokenSourceMintCount(t *testing.T) {
 	t.Parallel()
-	f := newFakeIssuer(t, 600)
-	m := f.issuer(t, nil)
+	human := onPremHuman()
 	other := onPremHuman()
 	other.Tenant = "run-2"
-
-	for _, h := range []Human{onPremHuman(), other, onPremHuman()} {
-		if _, err := m.TokenSource(h).Token(); err != nil {
-			t.Fatalf("Token: %v", err)
-		}
+	tests := []struct {
+		name      string
+		reads     []Human
+		expiresIn int
+		wantMints int32
+	}{
+		{name: "one mint per distinct human", expiresIn: 600, reads: []Human{human, other, human}, wantMints: 2},
+		// 10 s of lifetime is under the 30 s margin, so every read mints again.
+		{name: "every read mints inside the margin", expiresIn: 10, reads: []Human{human, human, human}, wantMints: 3},
 	}
-	if got := f.hits.Load(); got != 2 {
-		t.Fatalf("issuer served %d mints, want one per distinct human", got)
-	}
-}
-
-func TestTokenSourceMintsAgainInsideTheRefreshMargin(t *testing.T) {
-	t.Parallel()
-	// 10 s of lifetime is under the 30 s margin, so every read mints again.
-	f := newFakeIssuer(t, 10)
-	m := f.issuer(t, nil)
-	src := m.TokenSource(onPremHuman())
-	for range 3 {
-		if _, err := src.Token(); err != nil {
-			t.Fatalf("Token: %v", err)
-		}
-	}
-	if got := f.hits.Load(); got != 3 {
-		t.Fatalf("issuer served %d mints, want 3", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f := newFakeIssuer(t, tt.expiresIn)
+			m := f.issuer(t, nil)
+			for _, h := range tt.reads {
+				if _, err := m.TokenSource(h).Token(); err != nil {
+					t.Fatalf("Token: %v", err)
+				}
+			}
+			if got := f.hits.Load(); got != tt.wantMints {
+				t.Fatalf("issuer served %d mints, want %d", got, tt.wantMints)
+			}
+		})
 	}
 }
 
@@ -151,28 +158,43 @@ func TestMintSendsTheModelClaims(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name  string
-		want  url.Values
+		want  map[string]string
 		human Human
 	}{
 		{
 			name:  "onprem full",
 			human: onPremHuman(),
-			want: url.Values{"scope": {"hyperfleet-onprem-full"}, "org_id": {"run-1"}, "project_id": {"e2e"},
-				"subject": {"e2e@example.com"}, "audience": {"hyperfleet-api"}},
+			want: map[string]string{"scope": "hyperfleet-onprem-full", "org_id": "run-1", "project_id": "e2e",
+				"subject": "e2e@example.com", "audience": "hyperfleet-api"},
+		},
+		{
+			name: "oracle full",
+			human: Human{Subject: "o@example.com", Audience: "aud", TenantModel: TenantModelOracle,
+				Tenant: "ocid1.tenancy.oc1..a", Subtenant: "ocid1.compartment.oc1..b"},
+			want: map[string]string{"scope": "hyperfleet-oracle-full", "tenancy_ocid": "ocid1.tenancy.oc1..a",
+				"compartment_id": "ocid1.compartment.oc1..b", "subject": "o@example.com", "audience": "aud"},
 		},
 		{
 			name: "oracle required only",
 			human: Human{Subject: "o@example.com", Audience: "aud", TenantModel: TenantModelOracle,
 				Tenant: "ocid1.tenancy.oc1..a"},
-			want: url.Values{"scope": {"hyperfleet-oracle-required"}, "tenancy_ocid": {"ocid1.tenancy.oc1..a"},
-				"compartment_id": {""}, "subject": {"o@example.com"}, "audience": {"aud"}},
+			want: map[string]string{"scope": "hyperfleet-oracle-required", "tenancy_ocid": "ocid1.tenancy.oc1..a",
+				"compartment_id": "", "subject": "o@example.com", "audience": "aud"},
 		},
 		{
-			name: "missing required claim",
+			name: "onprem missing required claim",
 			human: Human{Subject: "m@example.com", Audience: "aud", TenantModel: TenantModelOnPrem,
 				OmitRequired: true},
-			want: url.Values{"scope": {"hyperfleet-onprem-missing"}, "org_id": {""}, "project_id": {""},
-				"subject": {"m@example.com"}, "audience": {"aud"}},
+			want: map[string]string{"scope": "hyperfleet-onprem-missing", "org_id": "", "project_id": "",
+				"subject": "m@example.com", "audience": "aud"},
+		},
+		{
+			// The issuer's missing mapping keeps the optional claim.
+			name: "oracle missing required claim",
+			human: Human{Subject: "m@example.com", Audience: "aud", TenantModel: TenantModelOracle,
+				Subtenant: "ocid1.compartment.oc1..b", OmitRequired: true},
+			want: map[string]string{"scope": "hyperfleet-oracle-missing", "tenancy_ocid": "",
+				"compartment_id": "ocid1.compartment.oc1..b", "subject": "m@example.com", "audience": "aud"},
 		},
 	}
 	for _, tt := range tests {
@@ -185,8 +207,8 @@ func TestMintSendsTheModelClaims(t *testing.T) {
 			}
 			got := f.requests[0]
 			for key, want := range tt.want {
-				if got.Get(key) != want[0] {
-					t.Errorf("%s = %q, want %q", key, got.Get(key), want[0])
+				if got.Get(key) != want {
+					t.Errorf("%s = %q, want %q", key, got.Get(key), want)
 				}
 			}
 			for _, foreign := range []string{"org_id", "project_id", "tenancy_ocid", "compartment_id"} {
@@ -215,6 +237,51 @@ func TestMintLogsWithoutTheToken(t *testing.T) {
 	}
 }
 
+func TestNewMockIssuerTargetsTheNamespaceService(t *testing.T) {
+	t.Parallel()
+	// A zero Client has no REST config, so a mint stops at the connect step.
+	m := NewMockIssuer(&k8sclient.Client{}, "ns")
+	if m.host != fakeIssuerHost {
+		t.Errorf("host = %q, want %q", m.host, fakeIssuerHost)
+	}
+	_, err := m.TokenSource(onPremHuman()).Token()
+	if err == nil || !strings.Contains(err.Error(), "reach "+MockReleaseName) {
+		t.Fatalf("error = %v, want it to name the unreachable issuer", err)
+	}
+}
+
+func TestFailedMintIsReportedAndRetried(t *testing.T) {
+	t.Parallel()
+	f := newFakeIssuer(t, 600)
+	f.failNext.Store(true)
+	src := f.issuer(t, nil).TokenSource(onPremHuman())
+
+	_, err := src.Token()
+	if err == nil || !strings.Contains(err.Error(), "mint human token for e2e@example.com") {
+		t.Fatalf("error = %v, want it to name the human", err)
+	}
+	if _, err := src.Token(); err != nil {
+		t.Fatalf("Token after a failed mint: %v", err)
+	}
+	if got := f.hits.Load(); got != 2 {
+		t.Fatalf("issuer served %d requests, want 2", got)
+	}
+}
+
+func TestMintRejectsAnInvalidHumanWithoutARequest(t *testing.T) {
+	t.Parallel()
+	f := newFakeIssuer(t, 600)
+	h := onPremHuman()
+	h.Subject = ""
+	_, err := f.issuer(t, nil).TokenSource(h).Token()
+	if err == nil || !strings.Contains(err.Error(), "needs a subject") {
+		t.Fatalf("error = %v, want the validation error", err)
+	}
+	if got := f.hits.Load(); got != 0 {
+		t.Fatalf("issuer got %d requests, want none", got)
+	}
+}
+
 func TestHumanValidate(t *testing.T) {
 	t.Parallel()
 	valid := onPremHuman()
@@ -228,6 +295,7 @@ func TestHumanValidate(t *testing.T) {
 		{name: "no tenant", mutate: func(h *Human) { h.Tenant = "" }, want: "needs a tenant"},
 		{name: "no tenant with omit", mutate: func(h *Human) { h.Tenant, h.OmitRequired = "", true }},
 		{name: "no subject", mutate: func(h *Human) { h.Subject = "" }, want: "needs a subject"},
+		{name: "no audience", mutate: func(h *Human) { h.Audience = "" }, want: "needs an audience"},
 		{name: "unsafe tenant", mutate: func(h *Human) { h.Tenant = "a b" }, want: "unsupported characters"},
 	}
 	for _, tt := range tests {

@@ -16,12 +16,11 @@ import (
 func TestCheckDefaultHuman(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name     string
-		wantErr  []string
-		status   int
-		wantPass bool
+		name    string
+		wantErr []string
+		status  int
 	}{
-		{name: "accepted", status: http.StatusOK, wantPass: true},
+		{name: "accepted", status: http.StatusOK},
 		{name: "token rejected", status: http.StatusUnauthorized, wantErr: []string{"HTTP 401", "AUTH_MODE (EDGE+API)"}},
 		{name: "tenant model mismatch", status: http.StatusForbidden, wantErr: []string{"HTTP 403", "TENANT_MODEL (oracle)"}},
 		{name: "other status", status: http.StatusInternalServerError, wantErr: []string{"HTTP 500"}},
@@ -49,7 +48,7 @@ func TestCheckDefaultHuman(t *testing.T) {
 			if gotPath != "/api/hyperfleet/v1/clusters" {
 				t.Errorf("path = %q, want the clusters list", gotPath)
 			}
-			if tt.wantPass {
+			if len(tt.wantErr) == 0 {
 				if err != nil {
 					t.Fatalf("CheckDefaultHuman: %v", err)
 				}

@@ -5,19 +5,23 @@
 #
 # Configuration Priority (highest to lowest):
 #   1. Command-line flags
-#   2. Environment variables (HYPERFLEET_* prefix; AUTH_MODE and TENANT_MODEL are unprefixed)
+#   2. Environment variables (HYPERFLEET_* prefix; AUTH_MODE and TENANT_MODEL also
+#      work unprefixed, and the prefixed name wins)
 #   3. This config file
 #   4. Built-in defaults
 #
 # See docs/config.md for full documentation
 
-# Authentication placement. AUTH_MODE and HYPERFLEET_AUTH_MODE override this value.
+# Authentication placement. Override it with AUTH_MODE or HYPERFLEET_AUTH_MODE.
+# If both are set, HYPERFLEET_AUTH_MODE wins.
 # Values: NONE, API, EDGE, EDGE+API.
 auth_mode: EDGE+API
 
 # Tenant model of the deployment. It selects the tenant claims of human tokens.
-# It must match the TENANT_MODEL that you used to deploy HyperFleet.
-# TENANT_MODEL and HYPERFLEET_TENANT_MODEL override this value.
+# It must match the tenant model that HyperFleet was deployed with (the
+# TENANT_MODEL deploy variable in hyperfleet-infra).
+# Override it with TENANT_MODEL or HYPERFLEET_TENANT_MODEL. If both are set,
+# HYPERFLEET_TENANT_MODEL wins.
 # Values: onprem, oracle.
 tenant_model: onprem
 
@@ -134,15 +138,12 @@ desire:
 # ============================================================================
 
 identity:
-  # Normal API operations run as a human. In every authenticated mode, the
-  # suite mints a JWT for hyperfleet-e2e@example.com from the mock OIDC issuer
-  # in NAMESPACE. The JWT has the tenant claims of tenant_model.
+  # Normal API operations run as the default human. See "Authentication mode"
+  # in docs/setup.md.
 
   # Expected audit identity for test assertions on created_by / deleted_by.
-  # If empty, the framework derives it from AUTH_MODE:
-  #   API and EDGE+API: the email of the default human.
-  #   EDGE: system@hyperfleet.local. The API does not validate tokens in this
-  #   mode and records its system default.
+  # If empty, the framework derives it from AUTH_MODE. See "Authentication mode"
+  # in docs/setup.md.
   # Can be overridden by: HYPERFLEET_IDENTITY_EXPECTEDIDENTITY
   expectedIdentity: ""
 

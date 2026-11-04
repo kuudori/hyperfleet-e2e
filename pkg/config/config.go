@@ -565,7 +565,7 @@ func (c *Config) applyDefaults() {
 		c.APIDeployment.ChartPath = os.Getenv("API_CHART_PATH")
 	}
 
-	// Authenticated E2E runs use the fixed, infra-owned machine identity by default.
+	// The machine-auth specs use the fixed, infra-owned machine identity by default.
 	if c.AuthMode != AuthModeNone && !IsDryRun() && !c.Identity.TokenRequest.IsEnabled() {
 		c.Identity.TokenRequest.ServiceAccountName = DefaultE2ERunnerServiceAccountName
 	}
@@ -681,7 +681,7 @@ func (c *Config) Validate() error {
 	if !dryRun && c.AuthMode != AuthModeNone && !c.Identity.TokenRequest.IsEnabled() {
 		return fmt.Errorf(
 			"configuration validation failed: identity.tokenRequest.serviceAccountName is required when AUTH_MODE=%s "+
-				"because the machine-auth specs mint its ServiceAccount tokens",
+				"because the machine-auth specs mint tokens for that ServiceAccount",
 			c.AuthMode,
 		)
 	}

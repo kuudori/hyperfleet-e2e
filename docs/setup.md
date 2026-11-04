@@ -51,9 +51,10 @@ Each mint is one HTTP request.
 The tenant of the default human is the run ID (`RUN_ID`). Because of this,
 reruns in one namespace do not see each other's resources.
 
-Machine tokens are only for the adapters and the machine-auth specs in
-`e2e/auth`. These specs mint their own Kubernetes TokenRequest tokens for
-`hyperfleet-e2e-runner` and for a temporary alternate ServiceAccount.
+The adapters and the machine-auth specs in `e2e/auth` use machine tokens. These
+specs mint their own Kubernetes TokenRequest tokens for `hyperfleet-e2e-runner`
+and for a temporary alternate ServiceAccount. For which identity a spec should
+use, see [API Identities](development.md#api-identities).
 
 | Mode | Token sent by E2E for API operations | Machine token sent by test adapters |
 | ---- | ------------------------------------ | ---------------------------------- |
@@ -85,9 +86,8 @@ Authenticated runs need:
   - Create TokenRequests for ServiceAccounts.
   - Create the temporary alternate ServiceAccount.
 
-At startup, each test process mints the token of the default human and lists
-clusters with it. If the mint fails or the API does not answer 200, the suite
-stops before any spec runs. See
+Before any spec runs, each test process also lists clusters as the default
+human. If the mint fails or the API does not answer 200, the suite stops. See
 [Human token mint failed](debugging.md#human-token-mint-failed) and
 [Default human rejected](debugging.md#default-human-rejected).
 

@@ -28,7 +28,7 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] Authentication Upgrade Path Vali
 		// This test validates the mode-appropriate authentication path in one flow:
 		//
 		//   1. Authentication is enforced -> unauthenticated GET is denied
-		//   2. Caller identity is preserved -> created_by contains the expected audit identity
+		//   2. Audit identity is recorded -> created_by contains the expected audit identity
 		//   3. Sentinel auth works -> cluster reaches Reconciled
 		//   4. The configured JWT trust path accepts the authenticated request
 		ginkgo.It("confirms the authentication path is applied in the deployed system",
@@ -48,7 +48,7 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] Authentication Upgrade Path Vali
 					Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-001"))
 				}
 
-				ginkgo.By("2. Verifying caller identity: creating cluster and checking created_by")
+				ginkgo.By("2. Verifying audit identity: creating cluster and checking created_by")
 				cluster, err := h.Client.CreateClusterFromPayload(
 					ctx,
 					h.TestDataPath("payloads/clusters/cluster-request.json"),
@@ -60,7 +60,7 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] Authentication Upgrade Path Vali
 				h.DeferCleanup(h.Entities.MustGet("Cluster"), "", clusterID)
 
 				Expect(cluster.CreatedBy).To(HaveValue(Equal(expected)),
-					"the selected authentication mode should preserve the caller identity")
+					"the selected authentication mode should record the expected audit identity")
 
 				ginkgo.By("3. Verifying Sentinel auth: cluster reaches Reconciled")
 				Eventually(
