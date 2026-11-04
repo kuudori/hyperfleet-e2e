@@ -377,6 +377,17 @@ The ms-scale API perf specs (list/create/update/delete/read latency) stay `Seria
 
 To reproduce the CI split locally, run `make e2e-ci GINKGO_LABEL_FILTER='tier1 && !perf'` and `make e2e-ci GINKGO_LABEL_FILTER=perf` as separate runs.
 
+## API Identities
+
+In authenticated modes, `h.Client` acts as the default human. The human token
+comes from the mock OIDC issuer (see
+[Authentication mode](setup.md#authentication-mode)). Use `h.Client` for API
+operations.
+
+Machine tokens are only for the machine-auth specs in `e2e/auth`. When tenant
+isolation is on, the API limits machine identities to reads and adapter status
+writes. A machine token cannot create or change resources.
+
 ## Adding New Tests
 
 ### 1. Create Test File

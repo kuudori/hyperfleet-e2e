@@ -297,7 +297,7 @@ func (h *Helper) adapterHelmSetArgs(releaseName string, opts AdapterDeploymentOp
 	// Authenticated modes require adapters to send their projected ServiceAccount token.
 	if h.Cfg.AdapterAuthEnabled() {
 		args = append(args, "--set", "adapterConfig.hyperfleetApi.auth.enabled=true")
-		if h.Cfg.AuthMode == config.AuthModeEdge || h.Cfg.AuthMode == config.AuthModeEdgeAPI {
+		if h.Cfg.HasGateway() {
 			args = append(
 				args,
 				"--set",

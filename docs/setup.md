@@ -35,25 +35,61 @@ The E2E runner defaults to `AUTH_MODE=EDGE+API`. Set `AUTH_MODE` to the same
 value used to deploy HyperFleet. Supported values are `NONE`, `API`, `EDGE`, and
 `EDGE+API`.
 
-For authenticated modes, E2E acquires a projected token for
-`hyperfleet-e2e-runner` using Kubernetes TokenRequest. The e2e Helmfile
-environment creates this ServiceAccount before tests start. The runner needs
-permission to create TokenRequests; the multi-issuer test also creates a
-temporary alternate ServiceAccount.
-The token namespace defaults to `NAMESPACE`, and the audit identity is derived
-automatically.
+The E2E runner uses `TENANT_MODEL=onprem` by default. Set `TENANT_MODEL` to the
+value that you used to deploy HyperFleet. Supported values are `onprem` and
+`oracle`. The tenant model selects the tenant claims in human tokens.
 
-| Mode | Machine token sent by E2E | Machine token sent by test adapters |
-| ---- | ------------------------- | ---------------------------------- |
+In authenticated modes, normal API operations run as a human. At startup, each
+test process mints a JWT for `hyperfleet-e2e@example.com`. The JWT comes from
+the mock OIDC issuer in `NAMESPACE` (`svc/hyperfleet-mock-oidc`, release
+`hyperfleet-mock-oidc`). The process mints a new token shortly before the old
+token expires.
+
+The suite reaches the issuer through the Kubernetes API server service proxy.
+Each mint is one HTTP request.
+
+The tenant of the default human is the run ID (`RUN_ID`). Because of this,
+reruns in one namespace do not see each other's resources.
+
+Machine tokens are only for the adapters and the machine-auth specs in
+`e2e/auth`. These specs mint their own Kubernetes TokenRequest tokens for
+`hyperfleet-e2e-runner` and for a temporary alternate ServiceAccount.
+
+| Mode | Token sent by E2E for API operations | Machine token sent by test adapters |
+| ---- | ------------------------------------ | ---------------------------------- |
 | `NONE` | No token | Chart default; auth is disabled |
-| `API` | `Bearer <token>` | Chart default `Bearer` |
-| `EDGE` | `ServiceAccount <token>` | `ServiceAccount <token>` |
-| `EDGE+API` | `ServiceAccount <token>` | `ServiceAccount <token>` |
+| `API` | `Bearer <mock OIDC JWT>` | Chart default `Bearer` |
+| `EDGE` | `Bearer <mock OIDC JWT>` | `ServiceAccount <token>` |
+| `EDGE+API` | `Bearer <mock OIDC JWT>` | `ServiceAccount <token>` |
 
 The schemes select different Authorino authentication methods. `ServiceAccount`
 triggers Kubernetes TokenReview; `Bearer` triggers human OIDC JWT validation.
 This prevents a machine token from entering the human-token path. See the
 [infra authentication explanation](https://github.com/openshift-hyperfleet/hyperfleet-infra/blob/main/README.md#L306-L308).
+
+The expected `created_by` and `deleted_by` value depends on the mode:
+
+- `API` and `EDGE+API`: the email of the human.
+- `EDGE`: `system@hyperfleet.local`. In this mode, the API does not validate
+  tokens and records its system default.
+
+`HYPERFLEET_IDENTITY_EXPECTEDIDENTITY` overrides the value.
+
+Authenticated runs need:
+
+- The mock OIDC issuer in `NAMESPACE`. Deploy it with `OIDC_ISSUER_MODE=mock`.
+  This is the hyperfleet-infra default for `e2e-kind` and `e2e-gcp`.
+- A kubeconfig with these permissions in `NAMESPACE`:
+  - Create and get `services/proxy`. The token request and the discovery check
+    in [Human token mint failed](debugging.md#human-token-mint-failed) use it.
+  - Create TokenRequests for ServiceAccounts.
+  - Create the temporary alternate ServiceAccount.
+
+At startup, each test process mints the token of the default human and lists
+clusters with it. If the mint fails or the API does not answer 200, the suite
+stops before any spec runs. See
+[Human token mint failed](debugging.md#human-token-mint-failed) and
+[Default human rejected](debugging.md#default-human-rejected).
 
 ### Option 1: Kind (Local)
 

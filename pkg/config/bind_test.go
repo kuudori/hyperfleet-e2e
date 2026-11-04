@@ -28,7 +28,10 @@ func TestEnvVarReachesEveryField(t *testing.T) {
 		case field.Type() == reflect.TypeFor[time.Duration]():
 			value, want[path] = (time.Duration(n) * time.Second).String(), time.Duration(n)*time.Second
 		case field.Kind() == reflect.String:
-			value, want[path] = "value-"+strconv.Itoa(n), "value-"+strconv.Itoa(n)
+			// Convert to the field's type, so a named string type such as
+			// identity.TenantModel compares equal.
+			value = "value-" + strconv.Itoa(n)
+			want[path] = reflect.ValueOf(value).Convert(field.Type()).Interface()
 		case field.Kind() == reflect.Bool:
 			value, want[path] = "true", true
 		case field.Kind() == reflect.Int64:

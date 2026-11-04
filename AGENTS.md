@@ -77,6 +77,10 @@ Eventually(h.Poll(ctx, h.Entities.MustGet("Cluster"), "", clusterID), h.Entities
 - Resolve payload paths with `h.TestDataPath("payloads/...")`. Never hardcode a `testdata/` prefix, because CI overrides `TESTDATA_DIR`.
 - Payloads in `testdata/payloads/` are Go templates. The available variables are the `templateVars` struct in `pkg/client/payload.go`.
 
+### API identity
+
+Use `h.Client` for API operations. It acts as the default human. Use machine tokens only in the machine-auth specs in `e2e/auth`. When tenant isolation is on, machine identities can only read and write status.
+
 ### Audit identity (JWT)
 
 When a spec checks `created_by` / `deleted_by`, guard the check. Audit checks are skipped when no identity is configured:

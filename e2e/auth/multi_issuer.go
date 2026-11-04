@@ -26,7 +26,7 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 			}
 		})
 
-		ginkgo.It("populates audit fields on write requests from JWT sub claim",
+		ginkgo.It("populates audit fields on write requests from the caller identity",
 			func(ctx context.Context) {
 				expected := h.ExpectedIdentity()
 				if expected == "" {
@@ -45,7 +45,7 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 				h.DeferCleanup(h.Entities.MustGet("Cluster"), "", clusterID)
 
 				Expect(cluster.CreatedBy).To(HaveValue(Equal(expected)),
-					"created_by should contain the JWT sub claim identity")
+					"created_by should contain the caller identity")
 
 				ginkgo.By("patching the cluster and verifying updated_by")
 				patched, err := h.Client.PatchClusterFromPayload(
@@ -55,7 +55,7 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 				)
 				Expect(err).NotTo(HaveOccurred(), "cluster PATCH should succeed")
 				Expect(patched.UpdatedBy).To(HaveValue(Equal(expected)),
-					"updated_by should contain the JWT sub claim identity")
+					"updated_by should contain the caller identity")
 
 				ginkgo.By("waiting for cluster to reconcile before delete")
 				Eventually(
@@ -69,7 +69,7 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 				deleted, err := h.Client.DeleteCluster(ctx, clusterID)
 				Expect(err).NotTo(HaveOccurred(), "cluster DELETE should succeed")
 				Expect(deleted.DeletedBy).To(HaveValue(Equal(expected)),
-					"deleted_by should contain the JWT sub claim identity")
+					"deleted_by should contain the caller identity")
 			})
 
 		ginkgo.It("rejects tokens from unconfigured issuers with 401",
@@ -95,7 +95,7 @@ var _ = ginkgo.Describe("[Suite: auth][multi-issuer] JWT Identity and Issuer Val
 				if !h.Cfg.Identity.TokenRequest.IsEnabled() {
 					ginkgo.Skip("TokenRequest not configured - cannot acquire token for a different SA")
 				}
-				if h.Cfg.AuthMode == config.AuthModeEdge || h.Cfg.AuthMode == config.AuthModeEdgeAPI {
+				if h.Cfg.HasGateway() {
 					ginkgo.Skip("edge authentication restricts machine ServiceAccounts to the gateway allow-list")
 				}
 

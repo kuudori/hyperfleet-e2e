@@ -25,6 +25,9 @@ import (
 // Client wraps kubernetes.Interface and provides business logic methods
 type Client struct {
 	kubernetes.Interface
+	// restConfig is the config the clientset was built from. ServiceProxy
+	// needs it to send raw HTTP requests to the API server.
+	restConfig *rest.Config
 }
 type DynamicClient struct {
 	dynamic.Interface
@@ -56,7 +59,7 @@ func NewClient() (*Client, error) {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	return &Client{Interface: clientset}, nil
+	return &Client{Interface: clientset, restConfig: config}, nil
 }
 
 func NewDynamicClient() (*DynamicClient, error) {
