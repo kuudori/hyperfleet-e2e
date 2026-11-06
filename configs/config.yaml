@@ -5,15 +5,25 @@
 #
 # Configuration Priority (highest to lowest):
 #   1. Command-line flags
-#   2. Environment variables (HYPERFLEET_* prefix; AUTH_MODE is unprefixed)
+#   2. Environment variables (HYPERFLEET_* prefix; AUTH_MODE and TENANT_MODEL also
+#      work unprefixed, and the prefixed name wins)
 #   3. This config file
 #   4. Built-in defaults
 #
 # See docs/config.md for full documentation
 
-# Authentication placement. AUTH_MODE and HYPERFLEET_AUTH_MODE override this value.
+# Authentication placement. Override it with AUTH_MODE or HYPERFLEET_AUTH_MODE.
+# If both are set, HYPERFLEET_AUTH_MODE wins.
 # Values: NONE, API, EDGE, EDGE+API.
 auth_mode: EDGE+API
+
+# Tenant model of the deployment. It selects the tenant claims of human tokens.
+# It must match the tenant model that HyperFleet was deployed with (the
+# TENANT_MODEL deploy variable in hyperfleet-infra).
+# Override it with TENANT_MODEL or HYPERFLEET_TENANT_MODEL. If both are set,
+# HYPERFLEET_TENANT_MODEL wins.
+# Values: onprem, oracle.
+tenant_model: onprem
 
 # ============================================================================
 # API Configuration
@@ -124,22 +134,22 @@ desire:
   adapter: "cl-desire"
 
 # ============================================================================
-# JWT Authentication Configuration
+# Identity Configuration
 # ============================================================================
 
 identity:
-  # Expected audit identity for test assertions.
-  # For K8s SA tokens with identity_claim=sub, format is "system:serviceaccount:<ns>:<sa>".
-  # The API resolves caller identity from the JWT claim — this field tells
-  # the E2E framework what value to expect in created_by / deleted_by fields.
-  # If empty, the framework derives the runner ServiceAccount identity automatically.
+  # Normal API operations run as the default human. See "Authentication mode"
+  # in docs/setup.md.
+
+  # Expected audit identity for test assertions on created_by / deleted_by.
+  # If empty, the framework derives it from AUTH_MODE. See "Authentication mode"
+  # in docs/setup.md.
   # Can be overridden by: HYPERFLEET_IDENTITY_EXPECTEDIDENTITY
   expectedIdentity: ""
 
   # Token Request Configuration (K8s TokenRequest API)
-  # When enabled (serviceAccountName is set), the E2E framework acquires
-  # a JWT from the K8s cluster at startup using the TokenRequest API.
-  # This is the recommended auth method for JWT-enabled API deployments.
+  # The machine-auth specs in e2e/auth use it to mint ServiceAccount tokens.
+  # Normal API operations do not use it.
   #
   # Authenticated modes default to ServiceAccount hyperfleet-e2e-runner.
   # Namespace defaults to the E2E namespace (NAMESPACE).

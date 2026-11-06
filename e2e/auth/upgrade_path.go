@@ -28,7 +28,7 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] Authentication Upgrade Path Vali
 		// This test validates the mode-appropriate authentication path in one flow:
 		//
 		//   1. Authentication is enforced -> unauthenticated GET is denied
-		//   2. Machine identity is preserved -> created_by contains the ServiceAccount subject
+		//   2. Audit identity is recorded -> created_by contains the expected audit identity
 		//   3. Sentinel auth works -> cluster reaches Reconciled
 		//   4. The configured JWT trust path accepts the authenticated request
 		ginkgo.It("confirms the authentication path is applied in the deployed system",
@@ -48,7 +48,7 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] Authentication Upgrade Path Vali
 					Expect(resp).To(helper.HaveRFC9457Error("HYPERFLEET-AUT-001"))
 				}
 
-				ginkgo.By("2. Verifying machine identity: creating cluster and checking created_by")
+				ginkgo.By("2. Verifying audit identity: creating cluster and checking created_by")
 				cluster, err := h.Client.CreateClusterFromPayload(
 					ctx,
 					h.TestDataPath("payloads/clusters/cluster-request.json"),
@@ -60,7 +60,7 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] Authentication Upgrade Path Vali
 				h.DeferCleanup(h.Entities.MustGet("Cluster"), "", clusterID)
 
 				Expect(cluster.CreatedBy).To(HaveValue(Equal(expected)),
-					"the selected authentication mode should preserve the ServiceAccount identity")
+					"the selected authentication mode should record the expected audit identity")
 
 				ginkgo.By("3. Verifying Sentinel auth: cluster reaches Reconciled")
 				Eventually(
@@ -72,8 +72,8 @@ var _ = ginkgo.Describe("[Suite: auth][upgrade] Authentication Upgrade Path Vali
 						"Sentinel must authenticate to API and publish events for cluster to reach Reconciled")
 
 				ginkgo.By("4. The configured JWT trust path accepted the authenticated request")
-				// API validates the cluster-issued token in API mode and the gateway
-				// wristband in EDGE+API mode. EDGE mode validates through TokenReview.
+				// API validates the human JWT in API mode and the gateway
+				// wristband in EDGE+API mode. EDGE validates the JWT at the gateway.
 			})
 	},
 )

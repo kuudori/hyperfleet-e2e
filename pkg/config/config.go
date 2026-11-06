@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/descriptor"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/identity"
 )
 
 const (
@@ -22,6 +23,8 @@ const (
 
 	// AuthModeConfigKey is the configuration key for AUTH_MODE.
 	AuthModeConfigKey = "auth_mode"
+	// TenantModelConfigKey is the configuration key for TENANT_MODEL.
+	TenantModelConfigKey = "tenant_model"
 
 	// AuthModeNone disables gateway and API authentication.
 	AuthModeNone = "NONE"
@@ -71,8 +74,13 @@ var Authentication = struct {
 	// Mode controls where API authentication is enforced.
 	// Env: AUTH_MODE
 	Mode string
+	// TenantModel (onprem or oracle) selects the tenant claims of human tokens
+	// and must match the deployment.
+	// Env: TENANT_MODEL
+	TenantModel string
 }{
-	Mode: AuthModeConfigKey,
+	Mode:        AuthModeConfigKey,
+	TenantModel: TenantModelConfigKey,
 }
 
 // Tests config keys for Ginkgo test execution
@@ -188,9 +196,8 @@ type APIDeploymentConfig struct {
 	ChartPath string `yaml:"chartPath" mapstructure:"chartPath"`
 }
 
-// TokenRequestConfig contains configuration for K8s TokenRequest-based JWT acquisition.
-// When enabled (ServiceAccountName is set), a JWT is acquired via the K8s TokenRequest API
-// at suite startup and used for API authentication.
+// TokenRequestConfig configures the K8s TokenRequest tokens that the machine-auth
+// specs in e2e/auth mint during a spec. It is enabled when ServiceAccountName is set.
 type TokenRequestConfig struct {
 	// Fixed to the E2E runner identity for authenticated modes.
 	ServiceAccountName string `yaml:"serviceAccountName" mapstructure:"serviceAccountName"`
@@ -204,25 +211,15 @@ func (t TokenRequestConfig) IsEnabled() bool {
 	return t.ServiceAccountName != ""
 }
 
-// IdentityConfig contains JWT authentication and audit identity configuration.
-// token is acquired via TokenRequest at runtime and sent with the mode-appropriate scheme.
+// IdentityConfig contains audit identity and machine TokenRequest configuration.
+// TokenRequest serves only the machine-auth specs; API calls run as a human
+// (pkg/identity).
 // ExpectedIdentity is used by test assertions to verify audit fields (created_by, deleted_by).
 type IdentityConfig struct {
-	token string // JWT machine token (acquired via TokenRequest, not user-configurable)
 	// Expected audit identity for assertions.
 	ExpectedIdentity string `yaml:"expectedIdentity" mapstructure:"expectedIdentity"`
 	// K8s TokenRequest JWT acquisition.
 	TokenRequest TokenRequestConfig `yaml:"tokenRequest" mapstructure:"tokenRequest"`
-}
-
-// Token returns the JWT bearer token.
-func (c *IdentityConfig) Token() string {
-	return c.token
-}
-
-// SetToken sets the JWT bearer token (called by TokenRequest acquisition).
-func (c *IdentityConfig) SetToken(t string) {
-	c.token = t
 }
 
 // DesireConfig contains settings for remote delivery
@@ -247,6 +244,7 @@ type Config struct {
 	APIDeployment     APIDeploymentConfig     `yaml:"apiDeployment" mapstructure:"apiDeployment"`
 	BrokerType        string                  `yaml:"brokerType" mapstructure:"brokerType"`
 	AuthMode          string                  `yaml:"auth_mode" mapstructure:"auth_mode"`
+	TenantModel       identity.TenantModel    `yaml:"tenant_model" mapstructure:"tenant_model"`
 	API               APIConfig               `yaml:"api" mapstructure:"api"`
 	RunID             string                  `yaml:"runId" mapstructure:"runId"`
 	TestDataDir       string                  `yaml:"testDataDir" mapstructure:"testDataDir"`
@@ -259,9 +257,14 @@ type Config struct {
 	Polling           PollingConfig           `yaml:"polling" mapstructure:"polling"`
 }
 
+// HasGateway reports whether requests pass the Envoy and Authorino gateway.
+func (c *Config) HasGateway() bool {
+	return c.AuthMode == AuthModeEdge || c.AuthMode == AuthModeEdgeAPI
+}
+
 // MachineAuthorizationScheme returns the Authorization scheme for Kubernetes ServiceAccount tokens.
 func (c *Config) MachineAuthorizationScheme() string {
-	if c.AuthMode == AuthModeEdge || c.AuthMode == AuthModeEdgeAPI {
+	if c.HasGateway() {
 		return AuthorizationSchemeServiceAccount
 	}
 	return AuthorizationSchemeBearer
@@ -273,10 +276,36 @@ func (c *Config) MachineAuthorizationScheme() string {
 // Authorino authorization hop to every request, so those modes get the
 // DefaultAuthLatencyAllowance on top of the base threshold.
 func (c *Config) APILatencyThreshold(base time.Duration) time.Duration {
-	if c.AuthMode == AuthModeEdge || c.AuthMode == AuthModeEdgeAPI {
+	if c.HasGateway() {
 		return base + DefaultAuthLatencyAllowance
 	}
 	return base
+}
+
+// AuditIdentity returns the identity the API records in created_by and
+// deleted_by for a human with the given subject. EDGE mode records the system
+// default, and NONE has no caller, so the result is empty and audit checks skip.
+func (c *Config) AuditIdentity(subject string) string {
+	switch c.AuthMode {
+	case AuthModeAPI, AuthModeEdgeAPI:
+		return subject
+	case AuthModeEdge:
+		return DefaultSystemIdentity
+	default:
+		return ""
+	}
+}
+
+// DefaultHuman returns the human behind h.Client. The tenant is the run ID, so
+// reruns in one namespace do not see each other's resources.
+func (c *Config) DefaultHuman() identity.Human {
+	return identity.Human{
+		Subject:     DefaultHumanSubject,
+		Audience:    DefaultHumanAudience,
+		TenantModel: c.TenantModel,
+		Tenant:      c.RunID,
+		Subtenant:   DefaultHumanSubtenant,
+	}
 }
 
 // AdapterAuthEnabled reports whether adapters should use projected API tokens.
@@ -392,11 +421,13 @@ func BindEnvVars() error {
 	viper.SetOptions(viper.ExperimentalBindStruct())
 	// Aliases for adapters.cluster and adapters.nodepool, removed with the per-kind
 	// suites in HYPERFLEET-1734. HYPERFLEET_ADAPTERS_<KIND> still wins.
-	// Include the unprefixed auth_mode alias. HYPERFLEET_AUTH_MODE still wins.
+	// Include the unprefixed auth_mode and tenant_model aliases.
+	// HYPERFLEET_AUTH_MODE and HYPERFLEET_TENANT_MODEL still win.
 	for _, binding := range [][]string{
 		{"adapters.cluster", "API_ADAPTERS_CLUSTER"},
 		{"adapters.nodepool", "API_ADAPTERS_NODEPOOL"},
 		{Authentication.Mode, "AUTH_MODE"},
+		{Authentication.TenantModel, "TENANT_MODEL"},
 	} {
 		if err := viper.BindEnv(binding...); err != nil {
 			return fmt.Errorf("failed to bind environment for %s: %w", binding[0], err)
@@ -410,6 +441,9 @@ func BindEnvVars() error {
 func (c *Config) applyDefaults() {
 	if c.AuthMode == "" {
 		c.AuthMode = DefaultAuthMode
+	}
+	if c.TenantModel == "" {
+		c.TenantModel = DefaultTenantModel
 	}
 
 	// Apply timeout defaults
@@ -531,7 +565,7 @@ func (c *Config) applyDefaults() {
 		c.APIDeployment.ChartPath = os.Getenv("API_CHART_PATH")
 	}
 
-	// Authenticated E2E runs use the fixed, infra-owned machine identity by default.
+	// The machine-auth specs use the fixed, infra-owned machine identity by default.
 	if c.AuthMode != AuthModeNone && !IsDryRun() && !c.Identity.TokenRequest.IsEnabled() {
 		c.Identity.TokenRequest.ServiceAccountName = DefaultE2ERunnerServiceAccountName
 	}
@@ -547,13 +581,11 @@ func (c *Config) applyDefaults() {
 		if c.Identity.TokenRequest.Audience == "" {
 			c.Identity.TokenRequest.Audience = DefaultTokenRequestAudience
 		}
-		if c.Identity.ExpectedIdentity == "" && c.Identity.TokenRequest.Namespace != "" {
-			c.Identity.ExpectedIdentity = fmt.Sprintf(
-				"system:serviceaccount:%s:%s",
-				c.Identity.TokenRequest.Namespace,
-				c.Identity.TokenRequest.ServiceAccountName,
-			)
-		}
+	}
+
+	// Specs write as the default human, so audit fields record that human.
+	if c.Identity.ExpectedIdentity == "" {
+		c.Identity.ExpectedIdentity = c.AuditIdentity(DefaultHumanSubject)
 	}
 }
 
@@ -566,6 +598,12 @@ func (c *Config) Validate() error {
 		return fmt.Errorf(
 			"configuration validation failed: auth_mode must be one of: NONE, API, EDGE, or EDGE+API. Got: %s",
 			c.AuthMode,
+		)
+	}
+	if _, _, err := c.TenantModel.Claims(); err != nil {
+		return fmt.Errorf(
+			"configuration validation failed: tenant_model (TENANT_MODEL) must be onprem or oracle. Got: %s",
+			c.TenantModel,
 		)
 	}
 
@@ -639,32 +677,11 @@ func (c *Config) Validate() error {
 				)
 			}
 		}
-
-		// Reject token lifetimes shorter than the suite timeout (CWE-613).
-		// The token is acquired once before the suite; a shorter lifetime
-		// causes deterministic 401 failures later.
-		if !dryRun {
-			suiteTimeout := 2 * time.Hour
-			if t := viper.GetDuration(Tests.SuiteTimeout); t > 0 {
-				suiteTimeout = t
-			}
-			tokenLifetime := time.Duration(c.Identity.TokenRequest.ExpirationSeconds) * time.Second
-			if tokenLifetime > 0 && tokenLifetime < suiteTimeout {
-				return fmt.Errorf(
-					"configuration validation failed: identity.tokenRequest.expirationSeconds (%ds = %s) "+
-						"is shorter than the suite timeout (%s) - the JWT will expire mid-run causing 401 failures. "+
-						"Increase expirationSeconds or reduce SUITE_TIMEOUT",
-					c.Identity.TokenRequest.ExpirationSeconds,
-					tokenLifetime,
-					suiteTimeout,
-				)
-			}
-		}
 	}
 	if !dryRun && c.AuthMode != AuthModeNone && !c.Identity.TokenRequest.IsEnabled() {
 		return fmt.Errorf(
 			"configuration validation failed: identity.tokenRequest.serviceAccountName is required when AUTH_MODE=%s "+
-				"because E2E clients use machine ServiceAccount tokens",
+				"because the machine-auth specs mint tokens for that ServiceAccount",
 			c.AuthMode,
 		)
 	}
@@ -679,6 +696,7 @@ func (c *Config) Display() {
 	slog.Info("Loaded configuration", append([]any{
 		"api_url", redactURL(c.API.URL),
 		"auth_mode", c.AuthMode,
+		"tenant_model", c.TenantModel,
 		"namespace", c.Namespace,
 		"gcp_project_id", c.GCPProjectID,
 		"output_dir", c.OutputDir,

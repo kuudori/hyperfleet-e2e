@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 )
 
@@ -32,7 +34,7 @@ func rawRequestWithScheme(ctx context.Context, apiURL, method, token, scheme str
 	if token != "" {
 		req.Header.Set("Authorization", scheme+" "+token)
 	}
-	return (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	return (&http.Client{Timeout: client.DefaultHTTPTimeout}).Do(req)
 }
 
 // craftJWT creates a self-signed JWT with arbitrary claims, signed with a random RSA key.

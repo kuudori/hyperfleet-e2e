@@ -152,6 +152,58 @@ infra change. Redeploy `e2e-kind`/`e2e-gcp` or update the descriptor table. Do
 not relax the guard to make a stale environment pass. `--dry-run` skips this
 check because it lists specs without a cluster.
 
+### Human Token Mint Failed
+
+In authenticated modes, each test process mints a human token from the mock
+OIDC issuer before any spec runs. If the mint fails, the suite stops with
+`mint the default human token from release "hyperfleet-mock-oidc"`. Check these
+causes in this order:
+
+1. The mock issuer is not deployed. HyperFleet deploys it only with
+   `OIDC_ISSUER_MODE=mock`. See
+   [Authentication mode](setup.md#authentication-mode). Run:
+
+   ```bash
+   kubectl get deployment,service hyperfleet-mock-oidc --namespace "$NAMESPACE"
+   ```
+
+2. The kubeconfig cannot reach the issuer through the API server service
+   proxy, or the NetworkPolicy of the issuer drops the proxied request. A `403`
+   from the API server is an RBAC error. A timeout or `503` is a network
+   error. On GKE, the API server reaches the issuer through `konnectivity-agent`
+   in `kube-system`. The NetworkPolicy of the mock issuer must allow it. Run:
+
+   ```bash
+   kubectl auth can-i create services/proxy --namespace "$NAMESPACE"
+   kubectl auth can-i get services/proxy --namespace "$NAMESPACE"
+   kubectl get --raw "/api/v1/namespaces/$NAMESPACE/services/https:hyperfleet-mock-oidc:8443/proxy/default/.well-known/openid-configuration"
+   ```
+
+### Default Human Rejected
+
+After the mint, each test process lists clusters as the default human. If the
+API does not answer 200, the suite stops with
+`the deployment does not accept the default human`. Find the cause from the
+HTTP status:
+
+- `HTTP 401`: the deployment rejected the token. Set `AUTH_MODE` to the value
+  that you used to deploy HyperFleet. Make sure that the deployment trusts the
+  mock issuer in `NAMESPACE` (deployed with `OIDC_ISSUER_MODE=mock`).
+- `HTTP 403`: the gateway denied the human. The token does not have the
+  required tenant claim of the deployed tenant model. Set `TENANT_MODEL` to the
+  value that you used to deploy HyperFleet. To read the deployed value, run:
+
+  ```bash
+  helm get values hyperfleet-gateway --all --namespace "$NAMESPACE" --output yaml | yq '.tenant.model'
+  ```
+
+- Any other status: check the API and gateway pods.
+
+A run with `AUTH_MODE=EDGE` against an `EDGE+API` deployment (or the reverse)
+passes this check, because both modes accept the human token. The run fails
+later, in the `created_by` and `deleted_by` checks, because the expected value
+depends on the mode. See [Authentication mode](setup.md#authentication-mode).
+
 ---
 
 ## 3. Log Interpretation

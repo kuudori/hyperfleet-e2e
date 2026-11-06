@@ -4,6 +4,8 @@ import (
 	"log"
 	"sync"
 
+	"golang.org/x/oauth2"
+
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client"
 	k8sclient "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
@@ -14,6 +16,9 @@ var (
 	suiteConfig           *config.Config
 	configMutex           sync.RWMutex
 	adapterDeploymentList *AdapterDeploymentList
+	// humanTokenSource is the default human's token source behind h.Client.
+	// It is set per process in authenticated modes.
+	humanTokenSource oauth2.TokenSource
 )
 
 // SetSuiteConfig sets the global suite configuration for the test suite
@@ -35,6 +40,21 @@ func ClearSuiteConfig() {
 	configMutex.Lock()
 	defer configMutex.Unlock()
 	suiteConfig = nil
+	humanTokenSource = nil
+}
+
+// SetHumanAuth stores this process's token source for the default human
+// behind h.Client.
+func SetHumanAuth(src oauth2.TokenSource) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+	humanTokenSource = src
+}
+
+func getHumanTokenSource() oauth2.TokenSource {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return humanTokenSource
 }
 
 func SetAdapterDeploymentList(list *AdapterDeploymentList) {
@@ -70,8 +90,8 @@ func New() *Helper {
 	}
 
 	var opts []client.ClientOption
-	if token := cfg.Identity.Token(); token != "" {
-		opts = append(opts, client.WithAuthorizationToken(token, cfg.MachineAuthorizationScheme()))
+	if src := getHumanTokenSource(); src != nil {
+		opts = append(opts, client.WithTokenSource(src, config.AuthorizationSchemeBearer))
 	}
 
 	cl, err := client.NewHyperFleetClient(cfg.API.URL, nil, opts...)

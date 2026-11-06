@@ -336,12 +336,14 @@ The framework uses hand-written Go types (`Resource`, `AdapterStatus`, `Resource
 - **Types**: Defined in `pkg/client/resource.go` - `Resource`, `ResourceCondition`, `AdapterStatus`, etc.
 - **Generic CRUD**: `CreateResource`, `GetResource`, `ListResources`, `PatchResource`, `DeleteResource`
 - **Entity convenience methods**: `GetCluster`, `CreateNodePool`, etc. delegate to generic CRUD with entity-specific paths
-- **Auth**: `WithAuthorizationToken` wraps `http.RoundTripper` and injects a mode-specific scheme on API-host requests; `WithBearerToken` remains a compatibility wrapper.
+- **Auth**: `WithTokenSource` wraps `http.RoundTripper`. It asks an `oauth2.TokenSource` for a token on every API-host request, so a cached source can refresh the token during a spec. `WithAuthorizationToken` and `WithBearerToken` wrap a fixed token.
+- **Human identities**: `pkg/identity` mints human JWTs from the mock OIDC issuer through the API server service proxy. It caches one token source for each `identity.Human`. `h.Client` acts as the default human (`cfg.DefaultHuman()`). The tenant claims of this human follow `TENANT_MODEL`.
 
 **Example**:
 ```go
-// Create client with the scheme selected by AUTH_MODE.
-cl, err := client.NewHyperFleetClient(apiURL, nil, client.WithAuthorizationToken(token, cfg.MachineAuthorizationScheme()))
+// Act as a human from the deployment's mock OIDC issuer.
+src := identity.NewMockIssuer(k8s, namespace).TokenSource(cfg.DefaultHuman())
+cl, err := client.NewHyperFleetClient(apiURL, nil, client.WithTokenSource(src, config.AuthorizationSchemeBearer))
 if err != nil {
     log.Fatalf("create client: %v", err)
 }

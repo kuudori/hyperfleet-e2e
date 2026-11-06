@@ -47,7 +47,7 @@ See [perf/README.md](perf/README.md).
 
 Configuration priority (highest to lowest):
 1. CLI flags (`--api-url`)
-2. Environment variables (`HYPERFLEET_API_URL`; `AUTH_MODE` is unprefixed)
+2. Environment variables (`HYPERFLEET_API_URL`; `AUTH_MODE` and `TENANT_MODEL` also work unprefixed, and the prefixed name wins)
 3. Config file (`configs/config.yaml`)
 4. Built-in defaults
 

@@ -14,6 +14,7 @@ import (
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/cmd/hyperfleet-e2e/cliconfig"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/descriptor"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/identity"
 )
 
 // shippedConfig is the configs/config.yaml the image ships and CI runs with.
@@ -43,7 +44,8 @@ func loadConfigResult(t *testing.T, configFile string, env map[string]string) (*
 	// env/env.local exports the API_ADAPTERS_* aliases.
 	for _, kv := range os.Environ() {
 		name, _, _ := strings.Cut(kv, "=")
-		if strings.HasPrefix(name, config.EnvPrefix+"_") || strings.HasPrefix(name, "API_ADAPTERS_") || name == "AUTH_MODE" {
+		if strings.HasPrefix(name, config.EnvPrefix+"_") || strings.HasPrefix(name, "API_ADAPTERS_") ||
+			name == "AUTH_MODE" || name == "TENANT_MODEL" {
 			t.Setenv(name, "")
 		}
 	}
@@ -158,7 +160,7 @@ func TestAuthMode(t *testing.T) {
 			wantScheme:   config.AuthorizationSchemeServiceAccount,
 			wantSA:       config.DefaultE2ERunnerServiceAccountName,
 			wantNS:       "unit-test",
-			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+			wantIdentity: config.DefaultHumanSubject,
 		},
 		{
 			name:         "bare AUTH_MODE overrides default",
@@ -167,7 +169,7 @@ func TestAuthMode(t *testing.T) {
 			wantScheme:   config.AuthorizationSchemeBearer,
 			wantSA:       config.DefaultE2ERunnerServiceAccountName,
 			wantNS:       "unit-test",
-			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+			wantIdentity: config.DefaultHumanSubject,
 		},
 		{
 			name:         "bare AUTH_MODE overrides config file",
@@ -177,7 +179,7 @@ func TestAuthMode(t *testing.T) {
 			wantScheme:   config.AuthorizationSchemeServiceAccount,
 			wantSA:       config.DefaultE2ERunnerServiceAccountName,
 			wantNS:       "unit-test",
-			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+			wantIdentity: config.DefaultSystemIdentity,
 		},
 		{
 			name:       "config file sets mode",
@@ -192,7 +194,7 @@ func TestAuthMode(t *testing.T) {
 			wantScheme:   config.AuthorizationSchemeBearer,
 			wantSA:       config.DefaultE2ERunnerServiceAccountName,
 			wantNS:       "unit-test",
-			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+			wantIdentity: config.DefaultHumanSubject,
 		},
 		{
 			name:         "HYPERFLEET_AUTH_MODE beats AUTH_MODE",
@@ -201,7 +203,7 @@ func TestAuthMode(t *testing.T) {
 			wantScheme:   config.AuthorizationSchemeBearer,
 			wantSA:       config.DefaultE2ERunnerServiceAccountName,
 			wantNS:       "unit-test",
-			wantIdentity: "system:serviceaccount:unit-test:" + config.DefaultE2ERunnerServiceAccountName,
+			wantIdentity: config.DefaultHumanSubject,
 		},
 	}
 
@@ -228,6 +230,90 @@ func TestAuthMode(t *testing.T) {
 				t.Errorf("Identity.ExpectedIdentity = %q, want %q", got, tt.wantIdentity)
 			}
 		})
+	}
+}
+
+func TestAuditIdentity(t *testing.T) {
+	t.Parallel()
+	for mode, want := range map[string]string{
+		config.AuthModeNone:    "",
+		config.AuthModeAPI:     "human@example.com",
+		config.AuthModeEdge:    config.DefaultSystemIdentity,
+		config.AuthModeEdgeAPI: "human@example.com",
+	} {
+		cfg := &config.Config{AuthMode: mode}
+		if got := cfg.AuditIdentity("human@example.com"); got != want {
+			t.Errorf("AuditIdentity in %s = %q, want %q", mode, got, want)
+		}
+	}
+}
+
+func TestExpectedIdentityOverrideWins(t *testing.T) {
+	cfg := loadConfig(t, "", map[string]string{"HYPERFLEET_IDENTITY_EXPECTEDIDENTITY": "someone@example.com"})
+	if got := cfg.Identity.ExpectedIdentity; got != "someone@example.com" {
+		t.Errorf("Identity.ExpectedIdentity = %q, want the configured override", got)
+	}
+}
+
+func TestDefaultHuman(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{RunID: "run-42", TenantModel: identity.TenantModelOracle}
+	h := cfg.DefaultHuman()
+	want := identity.Human{
+		Subject: config.DefaultHumanSubject, Audience: config.DefaultHumanAudience,
+		TenantModel: identity.TenantModelOracle, Tenant: "run-42", Subtenant: config.DefaultHumanSubtenant,
+	}
+	if h != want {
+		t.Fatalf("DefaultHuman = %+v, want %+v", h, want)
+	}
+	if err := h.Validate(); err != nil {
+		t.Fatalf("default human does not validate: %v", err)
+	}
+}
+
+func TestTenantModel(t *testing.T) {
+	tests := []struct {
+		name       string
+		configYAML string
+		env        map[string]string
+		want       identity.TenantModel
+	}{
+		{name: "default", want: config.DefaultTenantModel},
+		{name: "config file sets model", configYAML: "tenant_model: oracle\n", want: identity.TenantModelOracle},
+		{
+			name: "bare TENANT_MODEL overrides config file", configYAML: "tenant_model: onprem\n",
+			env: map[string]string{"TENANT_MODEL": "oracle"}, want: identity.TenantModelOracle,
+		},
+		{
+			name: "HYPERFLEET_TENANT_MODEL beats TENANT_MODEL",
+			env:  map[string]string{"HYPERFLEET_TENANT_MODEL": "onprem", "TENANT_MODEL": "oracle"},
+			want: identity.TenantModelOnPrem,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configFile := ""
+			if tt.configYAML != "" {
+				configFile = writeConfigFile(t, tt.configYAML)
+			}
+			cfg := loadConfig(t, configFile, tt.env)
+			if cfg.TenantModel != tt.want {
+				t.Errorf("TenantModel = %q, want %q", cfg.TenantModel, tt.want)
+			}
+			if got := cfg.DefaultHuman().TenantModel; got != tt.want {
+				t.Errorf("DefaultHuman().TenantModel = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTenantModelRejectsUnsupportedValue(t *testing.T) {
+	_, err := loadConfigResult(t, "", map[string]string{"TENANT_MODEL": "aws"})
+	if err == nil {
+		t.Fatal("Load accepted unsupported TENANT_MODEL")
+	}
+	if !strings.Contains(err.Error(), "TENANT_MODEL") || !strings.Contains(err.Error(), "aws") {
+		t.Errorf("Load error = %q, want it to name TENANT_MODEL and the value", err)
 	}
 }
 

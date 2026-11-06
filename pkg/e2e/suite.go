@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"log/slog"
 
@@ -9,6 +11,7 @@ import (
 	k8sclient "github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/client/kubernetes"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/config"
 	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/helper"
+	"github.com/openshift-hyperfleet/hyperfleet-e2e/pkg/identity"
 )
 
 var (
@@ -28,8 +31,7 @@ func GetSuiteConfig() *config.Config {
 }
 
 var _ = ginkgo.SynchronizedBeforeSuite(
-	// Process 1 only: mint the JWT token once and share it, so parallel
-	// processes don't each burn a redundant TokenRequest call at startup.
+	// Process 1 only: run the read-only startup checks once.
 	func(ctx ginkgo.SpecContext) []byte {
 		cfg := GetSuiteConfig()
 		if cfg == nil {
@@ -44,29 +46,10 @@ var _ = ginkgo.SynchronizedBeforeSuite(
 		if err := helper.ValidateAPIEntityConfig(ctx, cfg.Namespace, config.EntityDescriptors()); err != nil {
 			ginkgo.Fail(err.Error())
 		}
-
-		if config.IsDryRun() || cfg.AuthMode == config.AuthModeNone || !cfg.Identity.TokenRequest.IsEnabled() {
-			return nil
-		}
-
-		k8s, err := k8sclient.NewClient()
-		if err != nil {
-			log.Fatalf("Failed to create K8s client for token acquisition: %v", err)
-		}
-		token, err := k8s.CreateToken(
-			ctx,
-			cfg.Identity.TokenRequest.Namespace,
-			cfg.Identity.TokenRequest.ServiceAccountName,
-			cfg.Identity.TokenRequest.Audience,
-			cfg.Identity.TokenRequest.ExpirationSeconds,
-		)
-		if err != nil {
-			log.Fatalf("Failed to acquire JWT via TokenRequest: %v", err)
-		}
-		return []byte(token)
+		return nil
 	},
-	// Runs on every process: apply the token minted above (if any) and finish suite setup.
-	func(ctx ginkgo.SpecContext, tokenBytes []byte) {
+	// Runs on every process: set up this process's human tokens and finish suite setup.
+	func(ctx ginkgo.SpecContext, _ []byte) {
 		cfg := GetSuiteConfig()
 		if cfg == nil {
 			log.Fatalf("Suite config not initialized")
@@ -81,12 +64,8 @@ var _ = ginkgo.SynchronizedBeforeSuite(
 		}
 		slog.Info("starting hyperfleet-e2e test suite - creating resources with", "run-id", cfg.RunID)
 
-		if len(tokenBytes) > 0 {
-			cfg.Identity.SetToken(string(tokenBytes))
-			slog.Info("acquired JWT for suite",
-				"service-account", cfg.Identity.TokenRequest.Namespace+"/"+cfg.Identity.TokenRequest.ServiceAccountName,
-				"audience", cfg.Identity.TokenRequest.Audience,
-				"expires-seconds", cfg.Identity.TokenRequest.ExpirationSeconds)
+		if !config.IsDryRun() && cfg.AuthMode != config.AuthModeNone {
+			setUpHumanAuth(ctx, cfg)
 		}
 
 		// Initialize adapter deployment list - for test tiers that deploy temporary adapters.
@@ -96,6 +75,29 @@ var _ = ginkgo.SynchronizedBeforeSuite(
 		slog.Info("starting hyperfleet-e2e test suite - each test creates temporary resources")
 	},
 )
+
+// setUpHumanAuth mints this process's default human token and checks that the
+// deployment accepts it, so a missing mock or a config mismatch fails the suite
+// before any spec runs.
+func setUpHumanAuth(ctx context.Context, cfg *config.Config) {
+	k8s, err := k8sclient.NewClient()
+	if err != nil {
+		log.Fatalf("Failed to create K8s client for human tokens: %v", err)
+	}
+	issuer := identity.NewMockIssuer(k8s, cfg.Namespace)
+	human := cfg.DefaultHuman()
+	src := issuer.TokenSource(human)
+	if _, err := src.Token(); err != nil {
+		ginkgo.Fail(fmt.Sprintf(
+			"mint the default human token from release %q in namespace %q: %v\n"+
+				"See docs/debugging.md#human-token-mint-failed", identity.MockReleaseName, cfg.Namespace, err))
+	}
+	if err := helper.CheckDefaultHuman(ctx, cfg, src); err != nil {
+		ginkgo.Fail(fmt.Sprintf("the deployment does not accept the default human %s: %v\n"+
+			"See docs/debugging.md#default-human-rejected", human.Subject, err))
+	}
+	helper.SetHumanAuth(src)
+}
 
 var _ = ginkgo.SynchronizedAfterSuite(
 	// Per-process: sweep Pub/Sub resources. Safe to call from every process
